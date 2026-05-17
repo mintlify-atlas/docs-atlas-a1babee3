@@ -1,0 +1,187 @@
+---
+title: "Render PDF pages to images with PDFBox"
+description: "Convert PDF pages to BufferedImage using PDFRenderer. Control DPI, ImageType (RGB, GRAY, ARGB), and save output as PNG, JPEG, or TIFF using Java ImageIO."
+---
+
+PDFBox can rasterize any PDF page into a Java `BufferedImage`. The `PDFRenderer` class handles the rendering pipeline, and `ImageIO` writes the result to disk. This is useful for thumbnails, previews, and document conversion pipelines.
+
+## Rendering a page to BufferedImage
+
+Create a `PDFRenderer` from an open `PDDocument`, then call `renderImage()` (scale-based) or `renderImageWithDPI()` (DPI-based).
+
+```java RenderPage.java
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.PDFRenderer;
+import java.awt.image.BufferedImage;
+
+try (PDDocument document = Loader.loadPDF(new File("input.pdf")))
+{
+    PDFRenderer pdfRenderer = new PDFRenderer(document);
+
+    // Render page 0 at 72 DPI (scale = 1)
+    BufferedImage image = pdfRenderer.renderImage(0);
+}
+```
+
+### Method signatures
+
+From `PDFRenderer.java`, the available rendering methods are:
+
+```java PDFRenderer.java
+// Render at 72 DPI (scale = 1), RGB
+public BufferedImage renderImage(int pageIndex) throws IOException
+
+// Render at a given scale (1 = 72 DPI), RGB
+public BufferedImage renderImage(int pageIndex, float scale) throws IOException
+
+// Render at a given scale with a specific ImageType
+public BufferedImage renderImage(int pageIndex, float scale, ImageType imageType)
+        throws IOException
+
+// Render at an explicit DPI, RGB
+public BufferedImage renderImageWithDPI(int pageIndex, float dpi) throws IOException
+
+// Render at an explicit DPI with a specific ImageType
+public BufferedImage renderImageWithDPI(int pageIndex, float dpi, ImageType imageType)
+        throws IOException
+```
+
+All methods use a **zero-based** page index.
+
+## Saving as PNG or JPEG
+
+Pass the `BufferedImage` to `ImageIO.write()` with the desired format string:
+
+<CodeGroup>
+
+```java Save as PNG
+import javax.imageio.ImageIO;
+
+BufferedImage image = pdfRenderer.renderImageWithDPI(0, 150);
+ImageIO.write(image, "PNG", new File("page-0.png"));
+```
+
+```java Save as JPEG
+import javax.imageio.ImageIO;
+
+BufferedImage image = pdfRenderer.renderImageWithDPI(0, 150, ImageType.RGB);
+ImageIO.write(image, "JPEG", new File("page-0.jpg"));
+```
+
+</CodeGroup>
+
+<Warning>
+JPEG does not support transparency. Use `ImageType.RGB` (not `ARGB`) when saving as JPEG, or the output may appear with a black background.
+</Warning>
+
+## DPI and image quality
+
+The default `renderImage(pageIndex)` renders at 72 DPI (1 point = 1 pixel). Use `renderImageWithDPI()` for explicit control:
+
+| Use case | Recommended DPI |
+|---|---|
+| Screen preview / thumbnail | 72–96 |
+| On-screen display | 96–150 |
+| Print-ready output | 150–300 |
+| High-resolution archiving | 300–600 |
+
+```java DPI examples
+PDFRenderer renderer = new PDFRenderer(document);
+
+// 72 DPI — default screen quality
+BufferedImage screen = renderer.renderImage(0);
+
+// 150 DPI — good balance of quality and file size
+BufferedImage medium = renderer.renderImageWithDPI(0, 150);
+
+// 300 DPI — suitable for printing
+BufferedImage print = renderer.renderImageWithDPI(0, 300);
+```
+
+<Note>
+Higher DPI produces larger images. A US Letter page (8.5×11 in) at 300 DPI is 2550×3300 pixels. Memory usage scales with the square of the DPI increase.
+</Note>
+
+## ImageType options
+
+The `ImageType` enum controls the color model of the output `BufferedImage`:
+
+| Value | Description | `BufferedImage` type |
+|---|---|---|
+| `RGB` | Red, Green, Blue (default) | `TYPE_INT_RGB` |
+| `ARGB` | Alpha, Red, Green, Blue | `TYPE_INT_ARGB` |
+| `GRAY` | Shades of gray | `TYPE_BYTE_GRAY` |
+| `BINARY` | Black or white only | `TYPE_BYTE_BINARY` |
+| `BGR` | Blue, Green, Red | `TYPE_3BYTE_BGR` |
+
+```java ImageType usage
+import org.apache.pdfbox.rendering.ImageType;
+
+// Grayscale — smaller file size, no color
+BufferedImage gray = renderer.renderImageWithDPI(0, 150, ImageType.GRAY);
+
+// ARGB — preserves transparency
+BufferedImage transparent = renderer.renderImageWithDPI(0, 150, ImageType.ARGB);
+
+// BINARY — black and white only, smallest size
+BufferedImage bw = renderer.renderImageWithDPI(0, 150, ImageType.BINARY);
+```
+
+## Rendering all pages
+
+Loop over all pages by index and save each one:
+
+```java RenderAllPages.java
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.File;
+
+try (PDDocument document = Loader.loadPDF(new File("input.pdf")))
+{
+    PDFRenderer pdfRenderer = new PDFRenderer(document);
+    int pageCount = document.getNumberOfPages();
+
+    for (int page = 0; page < pageCount; ++page)
+    {
+        BufferedImage bim = pdfRenderer.renderImageWithDPI(page, 300, ImageType.RGB);
+        ImageIO.write(bim, "PNG", new File("page-" + page + ".png"));
+    }
+}
+```
+
+<Tip>
+For large documents, render pages one at a time and write each to disk before moving to the next. This avoids keeping all rendered images in memory simultaneously.
+</Tip>
+
+## Custom rendering with PageDrawer
+
+`PDFRenderer` can be subclassed to customise how pages are drawn. Override `createPageDrawer()` to return a custom `PageDrawer` subclass. `OpaquePDFRenderer` in the PDFBox examples module demonstrates this pattern — it replaces the default transparency group handling to produce opaque output suitable for printing on certain drivers:
+
+```java OpaquePDFRenderer.java
+import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.pdfbox.rendering.PageDrawer;
+import org.apache.pdfbox.rendering.PageDrawerParameters;
+
+public class OpaquePDFRenderer extends PDFRenderer
+{
+    public OpaquePDFRenderer(PDDocument document)
+    {
+        super(document);
+    }
+
+    @Override
+    protected PageDrawer createPageDrawer(PageDrawerParameters parameters)
+            throws IOException
+    {
+        // return a custom PageDrawer implementation here
+        return new MyPageDrawer(parameters);
+    }
+}
+```
+
+Use this approach when you need to intercept rendering operations, skip certain content types, or apply custom transformations during rendering.

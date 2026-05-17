@@ -1,0 +1,67 @@
+---
+title: "PDFBox command-line tools overview"
+description: "PDFBox ships a standalone executable JAR with built-in CLI commands for extracting text, rendering pages, merging, splitting, encrypting, and more."
+---
+
+PDFBox ships a standalone application JAR (`pdfbox-app`) that bundles every command-line utility into a single executable. You can download it from the [Apache PDFBox releases page](https://pdfbox.apache.org/download.cgi) and run any built-in command without additional classpath setup. All commands require **Java 11 or later** on your `PATH`.
+
+## Download and run
+
+Download the app JAR and invoke it with the subcommand of your choice:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar <command> [options]
+```
+
+Pass `help` or `--help` to list available subcommands, or `help <command>` for per-command usage:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar help
+java -jar pdfbox-app-3.0.0.jar help export:text
+```
+
+## Available commands
+
+| Command              | Subcommand name      | Description                                              |
+| -------------------- | -------------------- | -------------------------------------------------------- |
+| ExtractText          | `export:text`        | Extract plain text, HTML, or Markdown from a PDF         |
+| ExtractImages        | `export:images`      | Save all embedded images to individual files             |
+| PDFToImage           | `render`             | Render each PDF page to an image file (JPG, PNG, etc.)   |
+| PDFMerger            | `merge`              | Combine multiple PDFs into a single document             |
+| PDFSplit             | `split`              | Divide a PDF into separate files by page range           |
+| Encrypt              | `encrypt`            | Apply password or certificate-based encryption           |
+| Decrypt              | `decrypt`            | Remove encryption from a PDF using a password or cert    |
+| OverlayPDF           | `overlay`            | Overlay one PDF on top of another                        |
+| PrintPDF             | `print`              | Send a PDF to a printer                                  |
+| TextToPDF            | `fromtext`           | Convert a plain-text file to a PDF                       |
+| ImageToPDF           | `fromimage`          | Pack one or more images into a PDF                       |
+| ExportFDF            | `export:fdf`         | Export form field data to FDF format                     |
+| ImportFDF            | `import:fdf`         | Import FDF form data into a PDF                          |
+| ExportXFDF           | `export:xfdf`        | Export form field data to XFDF (XML) format              |
+| ImportXFDF           | `import:xfdf`        | Import XFDF form data into a PDF                         |
+| ExtractXMP           | `export:xmp`         | Extract XMP metadata from a PDF                          |
+| DecompressObjectstreams | `decode`          | Decode and decompress object streams for debugging       |
+
+<Note>
+Java 11 or later is required. The `pdfbox-app` JAR bundles Bouncy Castle for encryption support — no additional dependencies are needed on the classpath.
+</Note>
+
+## Individual tool pages
+
+<CardGroup cols={2}>
+  <Card title="ExtractText" href="/tools/extract-text" icon="file-text">
+    Extract text content from PDF documents
+  </Card>
+  <Card title="ExtractImages" href="/tools/extract-images" icon="image">
+    Save embedded images from PDFs to disk
+  </Card>
+  <Card title="PDFToImage" href="/tools/pdf-to-image" icon="layers">
+    Render PDF pages to image files
+  </Card>
+  <Card title="PDFMerger and PDFSplit" href="/tools/pdf-merge-split" icon="git-merge">
+    Combine or divide PDF documents
+  </Card>
+  <Card title="Encrypt and Decrypt" href="/tools/encrypt-decrypt" icon="lock">
+    Manage PDF passwords and permissions
+  </Card>
+</CardGroup>

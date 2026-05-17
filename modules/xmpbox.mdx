@@ -1,0 +1,88 @@
+---
+title: "XMPBox module: XMP metadata for PDF documents"
+description: "API reference for Apache XMPBox — the Java library for parsing, validating, and writing XMP metadata in PDF documents, including PDF/A compliance metadata."
+---
+
+XMPBox implements Adobe's XMP (Extensible Metadata Platform) specification for Java. It can parse, validate, and serialize XMP metadata embedded in PDF documents and is used by PDFBox when reading or writing document-level metadata. XMPBox is required when your application must produce or inspect PDF/A compliance metadata or any other XMP schema beyond what the basic PDFBox document information dictionary provides.
+
+## Dependency
+
+<CodeGroup>
+
+```xml Maven
+<dependency>
+  <groupId>org.apache.pdfbox</groupId>
+  <artifactId>xmpbox</artifactId>
+  <version>3.0.0</version>
+</dependency>
+```
+
+```groovy Gradle
+implementation 'org.apache.pdfbox:xmpbox:3.0.0'
+```
+
+</CodeGroup>
+
+## Key classes
+
+| Class | Package | Purpose |
+|---|---|---|
+| `XMPMetadata` | `org.apache.xmpbox` | Root container for all XMP schemas in a document; created via `XMPMetadata.createXMPMetadata()` |
+| `DublinCoreSchema` | `schema` | Dublin Core properties: `title`, `creator`, `description`, `subject`, `date` |
+| `AdobePDFSchema` | `schema` | Adobe PDF-specific properties: `PDFVersion`, `Producer`, `Keywords` |
+| `PDFAIdentificationSchema` | `schema` | PDF/A conformance level and part identifier required for PDF/A compliance |
+| `XMPBasicSchema` | `schema` | Core XMP properties: `CreateDate`, `ModifyDate`, `CreatorTool` |
+| `XmpSerializer` | `xml` | Serializes an `XMPMetadata` object to an XML byte stream |
+| `DomXmpParser` | `xml` | Parses raw XMP XML bytes into an `XMPMetadata` object |
+
+## Reading XMP from a PDF
+
+Use `PDMetadata` to retrieve the raw XMP stream from a `PDDocument`, then parse it with `DomXmpParser`.
+
+```java
+PDDocument doc = Loader.loadPDF(new File("document.pdf"));
+PDMetadata rawMetadata = doc.getDocumentCatalog().getMetadata();
+
+if (rawMetadata != null)
+{
+    DomXmpParser parser = new DomXmpParser();
+    XMPMetadata xmp = parser.parse(rawMetadata.toByteArray());
+
+    DublinCoreSchema dc = xmp.getDublinCoreSchema();
+    if (dc != null)
+    {
+        System.out.println("Title: " + dc.getTitle());
+    }
+}
+```
+
+## Writing XMP metadata
+
+Create an `XMPMetadata` instance, populate the required schemas, then serialize and attach the result to the document catalog.
+
+```java
+XMPMetadata xmp = XMPMetadata.createXMPMetadata();
+
+// Add Dublin Core schema
+DublinCoreSchema dc = xmp.createAndAddDublinCoreSchema();
+dc.setTitle("My Document");
+dc.addCreator("Example Corp");
+
+// Add PDF/A identification for compliance
+PDFAIdentificationSchema pdfaId = xmp.createAndAddPDFAIdentificationSchema();
+pdfaId.setPart(1);
+pdfaId.setConformance("B");
+
+// Serialize to bytes and attach to the document
+XmpSerializer serializer = new XmpSerializer();
+ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+serializer.serialize(xmp, buffer, true);
+
+PDMetadata metadata = new PDMetadata(doc);
+metadata.importXMPMetadata(buffer.toByteArray());
+doc.getDocumentCatalog().setMetadata(metadata);
+```
+
+<Note>
+XMPBox is required if you need PDF/A compliance metadata. The `PDFAIdentificationSchema` must be present and correctly populated for a document to be validated as PDF/A-1b, PDF/A-2b, or similar conformance levels.
+</Note>

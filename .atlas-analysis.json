@@ -1,0 +1,107 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Apache PDFBox",
+  "projectDescription": "An open source Java library for creating, manipulating, and extracting content from PDF documents.",
+  "theme": "maple",
+  "primaryColor": "#040404",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "migration"
+            ]
+          },
+          {
+            "group": "Core Guides",
+            "pages": [
+              "guides/creating-pdfs",
+              "guides/text-extraction",
+              "guides/rendering",
+              "guides/pdf-manipulation"
+            ]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": [
+              "guides/encryption",
+              "guides/digital-signatures",
+              "guides/forms",
+              "guides/fonts",
+              "guides/metadata"
+            ]
+          },
+          {
+            "group": "Modules",
+            "pages": [
+              "modules/pdfbox",
+              "modules/fontbox",
+              "modules/xmpbox"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Command-Line Tools",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "tools/overview"
+            ]
+          },
+          {
+            "group": "Tools Reference",
+            "pages": [
+              "tools/extract-text",
+              "tools/extract-images",
+              "tools/pdf-to-image",
+              "tools/pdf-merge-split",
+              "tools/encrypt-decrypt"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Create new PDF documents from scratch with text, images, and graphics",
+    "Extract text and images from existing PDF files",
+    "Render PDF pages to images (PNG, JPEG, etc.) at configurable DPI",
+    "Merge, split, and overlay PDF documents",
+    "Encrypt and decrypt PDFs with password and public-key protection",
+    "Create, fill, and read interactive AcroForms",
+    "Apply and verify digital signatures (including visible signatures and timestamps)",
+    "Embed and subset TrueType, Type1, and CFF fonts",
+    "Read and write XMP metadata",
+    "Command-line utilities for common PDF operations"
+  ],
+  "publicApiSurface": [
+    "org.apache.pdfbox.pdmodel.PDDocument",
+    "org.apache.pdfbox.pdmodel.PDPage",
+    "org.apache.pdfbox.pdmodel.PDPageContentStream",
+    "org.apache.pdfbox.text.PDFTextStripper",
+    "org.apache.pdfbox.text.PDFTextStripperByArea",
+    "org.apache.pdfbox.rendering.PDFRenderer",
+    "org.apache.pdfbox.multipdf.PDFMergerUtility",
+    "org.apache.pdfbox.multipdf.Splitter",
+    "org.apache.pdfbox.multipdf.Overlay",
+    "org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy",
+    "org.apache.pdfbox.pdmodel.encryption.PublicKeyProtectionPolicy",
+    "org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm",
+    "org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature",
+    "org.apache.pdfbox.pdmodel.font.PDType1Font",
+    "org.apache.pdfbox.pdmodel.font.PDType0Font",
+    "org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject",
+    "org.apache.fontbox.ttf.TrueTypeFont",
+    "org.apache.xmpbox.XMPMetadata",
+    "org.apache.pdfbox.Loader"
+  ]
+}

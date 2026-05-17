@@ -1,0 +1,225 @@
+---
+title: "Merge, split, and overlay PDF documents"
+description: "Combine multiple PDFs with PDFMergerUtility, split documents with Splitter, remove pages, and overlay content using the Overlay and LayerUtility classes."
+---
+
+PDFBox provides dedicated classes in the `org.apache.pdfbox.multipdf` package for common document-level operations: merging, splitting, overlaying, and importing pages as reusable form objects.
+
+## Merging PDFs
+
+`PDFMergerUtility` combines multiple source documents into a single output. Add sources with `addSource()` and call `mergeDocuments()` to produce the merged file.
+
+<Steps>
+  <Step title="Add sources and set destination">
+    ```java Merge to file
+    import org.apache.pdfbox.multipdf.PDFMergerUtility;
+
+    PDFMergerUtility merger = new PDFMergerUtility();
+    merger.addSource(new File("part1.pdf"));
+    merger.addSource(new File("part2.pdf"));
+    merger.addSource(new File("part3.pdf"));
+    merger.setDestinationFileName("merged.pdf");
+    ```
+  </Step>
+  <Step title="Call mergeDocuments">
+    ```java Merge to file
+    import org.apache.pdfbox.io.IOUtils;
+
+    merger.mergeDocuments(IOUtils.createMemoryOnlyStreamCache());
+    ```
+  </Step>
+</Steps>
+
+To merge into an `OutputStream` instead of a file — for example, in a servlet — use `setDestinationStream()`:
+
+```java PDFMergerExample.java
+import org.apache.pdfbox.io.IOUtils;
+import org.apache.pdfbox.multipdf.PDFMergerUtility;
+import org.apache.pdfbox.pdfwriter.compress.CompressParameters;
+import java.io.ByteArrayOutputStream;
+
+PDFMergerUtility pdfMerger = new PDFMergerUtility();
+pdfMerger.addSources(sources);          // List<RandomAccessRead>
+pdfMerger.setDestinationStream(mergedPDFOutputStream);
+
+pdfMerger.mergeDocuments(
+    IOUtils.createMemoryOnlyStreamCache(),
+    CompressParameters.NO_COMPRESSION
+);
+```
+
+You can set document metadata on the merged result before calling `mergeDocuments()`:
+
+```java Set merged document metadata
+import org.apache.pdfbox.pdmodel.PDDocumentInformation;
+
+PDDocumentInformation info = new PDDocumentInformation();
+info.setTitle("Merged Document");
+info.setCreator("My Application");
+info.setSubject("Combined report");
+
+pdfMerger.setDestinationDocumentInformation(info);
+```
+
+## Splitting PDFs
+
+`Splitter` divides a document into a list of single-page (or multi-page) `PDDocument` objects. By default each resulting document contains one page; use `setSplitAtPage()` to change the split interval.
+
+```java Split every page
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.multipdf.Splitter;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import java.util.List;
+
+try (PDDocument document = Loader.loadPDF(new File("input.pdf")))
+{
+    Splitter splitter = new Splitter();
+    List<PDDocument> pages = splitter.split(document);
+
+    int i = 0;
+    for (PDDocument page : pages)
+    {
+        page.save("page-" + i + ".pdf");
+        page.close();
+        i++;
+    }
+}
+```
+
+Restrict the split to a subset of pages using `setStartPage()` and `setEndPage()` (both 1-based), or change the split frequency with `setSplitAtPage()`:
+
+<Tabs>
+  <Tab title="Split at every N pages">
+    ```java Split every 2 pages
+    Splitter splitter = new Splitter();
+    splitter.setSplitAtPage(2);   // each output document gets 2 pages
+    List<PDDocument> parts = splitter.split(document);
+    ```
+  </Tab>
+  <Tab title="Split a page range">
+    ```java Split pages 3–7 only
+    Splitter splitter = new Splitter();
+    splitter.setStartPage(3);
+    splitter.setEndPage(7);
+    List<PDDocument> parts = splitter.split(document);
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+Save all split documents before closing the source document. The split documents share resources with the source until saved. Do not save them with encryption.
+</Warning>
+
+## Removing pages
+
+Use `PDDocument.removePage()` to delete pages by zero-based index:
+
+```java Remove a page
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+
+try (PDDocument document = Loader.loadPDF(new File("input.pdf")))
+{
+    // Remove the second page (zero-based index 1)
+    document.removePage(1);
+
+    document.save("output.pdf");
+}
+```
+
+To remove multiple pages, iterate from the last page backwards to avoid index shifting:
+
+```java Remove multiple pages
+// Remove pages 3, 5, and 7 (1-based), i.e. indices 2, 4, 6
+int[] toRemove = {6, 4, 2};  // descending order
+for (int index : toRemove)
+{
+    document.removePage(index);
+}
+```
+
+## Overlaying PDFs
+
+The `Overlay` class stamps the pages of one PDF on top of another. It supports different overlay documents for the first page, last page, odd pages, even pages, or all pages.
+
+```java Overlay all pages
+import org.apache.pdfbox.multipdf.Overlay;
+import java.util.HashMap;
+
+try (Overlay overlay = new Overlay())
+{
+    overlay.setInputFile("base.pdf");
+    overlay.setAllPagesOverlayFile("watermark.pdf");
+    overlay.setOutputFile("watermarked.pdf");
+
+    // Pass an empty map — no page-specific overrides
+    PDDocument result = overlay.overlay(new HashMap<>());
+    result.save("watermarked.pdf");
+    result.close();
+}
+```
+
+To overlay a different document on specific pages, pass a map of `page number (1-based) → overlay file path`:
+
+```java Page-specific overlays
+import java.util.Map;
+
+Map<Integer, String> specificOverlays = new HashMap<>();
+specificOverlays.put(1, "cover-overlay.pdf");
+specificOverlays.put(3, "chapter-overlay.pdf");
+
+PDDocument result = overlay.overlay(specificOverlays);
+result.save("output.pdf");
+result.close();
+```
+
+Control whether the overlay appears in the foreground or background with `setPosition()`:
+
+```java Overlay position
+import org.apache.pdfbox.multipdf.Overlay.Position;
+
+overlay.setPosition(Position.FOREGROUND);  // on top of existing content
+// or
+overlay.setPosition(Position.BACKGROUND);  // behind existing content (default)
+```
+
+## Importing pages as form objects
+
+`LayerUtility` imports a page from one document as a `PDFormXObject`, which can then be placed on a page in another document via a content stream. This is lower-level than `Overlay` but gives you precise control over placement and scaling.
+
+```java LayerUtility import
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.multipdf.LayerUtility;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.PDPageContentStream.AppendMode;
+import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
+import org.apache.pdfbox.util.Matrix;
+
+try (PDDocument targetDoc = Loader.loadPDF(new File("target.pdf"));
+     PDDocument sourceDoc = Loader.loadPDF(new File("source.pdf")))
+{
+    LayerUtility layerUtility = new LayerUtility(targetDoc);
+
+    // Wrap existing page content in save/restore to isolate graphics state
+    PDPage targetPage = targetDoc.getPage(0);
+    layerUtility.wrapInSaveRestore(targetPage);
+
+    // Import page 0 from the source document as a Form XObject
+    PDFormXObject form = layerUtility.importPageAsForm(sourceDoc, 0);
+
+    // Place the imported form on the target page
+    try (PDPageContentStream cs = new PDPageContentStream(
+            targetDoc, targetPage, AppendMode.APPEND, true, false))
+    {
+        cs.drawForm(form);
+    }
+
+    targetDoc.save("combined.pdf");
+}
+```
+
+<Note>
+`LayerUtility` is designed for use with already-saved documents. Avoid using it with newly generated documents that contain unsubsetted fonts, because font subsetting is finalised only on `save()`.
+</Note>

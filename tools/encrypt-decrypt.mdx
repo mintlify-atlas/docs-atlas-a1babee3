@@ -1,0 +1,114 @@
+---
+title: "Encrypt and Decrypt PDFs from the command line"
+description: "Use the PDFBox encrypt and decrypt commands to apply password or certificate-based encryption and to remove encryption from existing PDF documents."
+---
+
+PDFBox provides two commands for managing PDF security: `encrypt` applies password-based or certificate-based encryption and sets access permissions, while `decrypt` removes encryption entirely so the document can be opened without a password. Both commands read and write standard PDF files.
+
+<Warning>
+PDF encryption requires the Bouncy Castle library on the classpath. The `pdfbox-app` standalone JAR bundles Bouncy Castle automatically. If you are using `pdfbox-tools` without the app JAR, add `bcprov-jdk18on` and `bcpkix-jdk18on` to your classpath.
+</Warning>
+
+<Tabs>
+  <Tab title="Encrypt">
+    ## Encrypt
+
+    The `encrypt` command protects a PDF with a standard password or an X.509 certificate. You can independently control eight access permissions. If no output file is specified, the input file is overwritten in place.
+
+    ### Usage
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar encrypt -i <input.pdf> [options]
+    ```
+
+    ### Options
+
+    | Option                      | Default      | Description                                                                      |
+    | --------------------------- | ------------ | -------------------------------------------------------------------------------- |
+    | `-i, --input`               | _(required)_ | Path to the unencrypted input PDF                                                |
+    | `-o, --output`              | _(in-place)_ | Path for the encrypted output PDF; overwrites input if omitted                   |
+    | `-O`                        | _(none)_     | Owner password (ignored when `-certFile` is set)                                 |
+    | `-U`                        | _(none)_     | User password (ignored when `-certFile` is set)                                  |
+    | `-certFile`                 | _(none)_     | Path to an X.509 certificate file for public-key encryption; repeat for multiple recipients |
+    | `-keyLength`                | `256`        | Encryption key length in bits: `40`, `128`, or `256`                             |
+    | `-canAssemble`              | `true`       | Allow document assembly                                                          |
+    | `-canExtractContent`        | `true`       | Allow content extraction                                                         |
+    | `-canExtractForAccessibility` | `true`     | Allow extraction for accessibility tools                                         |
+    | `-canFillInForm`            | `true`       | Allow form fill-in                                                               |
+    | `-canModify`                | `true`       | Allow document modification                                                      |
+    | `-canModifyAnnotations`     | `true`       | Allow annotation modification                                                    |
+    | `-canPrint`                 | `true`       | Allow printing                                                                   |
+    | `-canPrintFaithful`         | `true`       | Allow high-quality (faithful) printing                                           |
+
+    ### Examples
+
+    Encrypt with an owner and user password using 256-bit AES (default):
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar encrypt \
+      -i document.pdf -o document-enc.pdf \
+      -O ownerpass -U userpass
+    ```
+
+    Encrypt and disallow printing and modification:
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar encrypt \
+      -i document.pdf -o readonly.pdf \
+      -O ownerpass -U userpass \
+      -canPrint false -canModify false -canPrintFaithful false
+    ```
+
+    Encrypt for a specific recipient using a certificate:
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar encrypt \
+      -i document.pdf -o document-enc.pdf \
+      -certFile recipient.crt
+    ```
+  </Tab>
+  <Tab title="Decrypt">
+    ## Decrypt
+
+    The `decrypt` command removes all security from an encrypted PDF. You must supply the **owner** password; the user password alone is not sufficient. For certificate-encrypted PDFs, provide the keystore and optional alias. If no output file is specified, the input is overwritten.
+
+    ### Usage
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar decrypt -i <input.pdf> [options]
+    ```
+
+    ### Options
+
+    | Option         | Default      | Description                                                                                      |
+    | -------------- | ------------ | ------------------------------------------------------------------------------------------------ |
+    | `-i, --input`  | _(required)_ | Path to the encrypted PDF                                                                        |
+    | `-o, --output` | _(in-place)_ | Path for the decrypted output PDF; overwrites input if omitted                                   |
+    | `-password`    | _(none)_     | Owner password for the PDF, or the password for the certificate keystore                         |
+    | `-keyStore`    | _(none)_     | Path to the keystore holding the certificate used to encrypt the document (certificate PDFs only) |
+    | `-alias`       | _(none)_     | Alias of the certificate entry within the keystore                                               |
+
+    ### Examples
+
+    Decrypt a password-protected PDF and write to a new file:
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar decrypt \
+      -i protected.pdf -o open.pdf -password ownerpass
+    ```
+
+    Decrypt in place (overwrites the input file):
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar decrypt -i protected.pdf -password ownerpass
+    ```
+
+    Decrypt a certificate-encrypted PDF using a PKCS#12 keystore:
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar decrypt \
+      -i cert-protected.pdf -o open.pdf \
+      -keyStore recipient.p12 -alias mykey -password keystorepass
+    ```
+  </Tab>
+</Tabs>

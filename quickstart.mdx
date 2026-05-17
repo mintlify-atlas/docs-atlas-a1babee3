@@ -1,81 +1,239 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
-icon: 'rocket'
+title: "Get started with Apache PDFBox"
+description: "Add PDFBox to a Java project via Maven or Gradle, create your first PDF document, and extract text from an existing file — all in under ten minutes."
 ---
 
-## Get started in three steps
-
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This quickstart walks you through adding PDFBox to a Java project, creating a PDF that contains a line of text, and extracting text from an existing PDF. By the end you will have a working setup and two runnable Java programs to build on.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+PDFBox 3.x requires **Java 11 or higher**. Make sure your `JAVA_HOME` points to a compatible JDK before proceeding.
 </Note>
+
+<Steps>
+
+<Step title="Add the dependency">
+
+Add the `pdfbox` artifact to your build. The `groupId` is `org.apache.pdfbox` and the latest stable release is **3.0.0**.
+
+<CodeGroup>
+
+```xml pom.xml
+<dependency>
+    <groupId>org.apache.pdfbox</groupId>
+    <artifactId>pdfbox</artifactId>
+    <version>3.0.0</version>
+</dependency>
+```
+
+```groovy build.gradle
+implementation 'org.apache.pdfbox:pdfbox:3.0.0'
+```
+
+</CodeGroup>
+
+If you use encryption or digital signatures, also add the Bouncy Castle provider. PDFBox 3.x uses Bouncy Castle 1.7x or later.
+
+<CodeGroup>
+
+```xml pom.xml (Bouncy Castle)
+<dependency>
+    <groupId>org.bouncycastle</groupId>
+    <artifactId>bcprov-jdk18on</artifactId>
+    <version>1.84</version>
+</dependency>
+<dependency>
+    <groupId>org.bouncycastle</groupId>
+    <artifactId>bcpkix-jdk18on</artifactId>
+    <version>1.84</version>
+</dependency>
+```
+
+```groovy build.gradle (Bouncy Castle)
+implementation 'org.bouncycastle:bcprov-jdk18on:1.84'
+implementation 'org.bouncycastle:bcpkix-jdk18on:1.84'
+```
+
+</CodeGroup>
+
+</Step>
+
+<Step title="Create a blank PDF">
+
+The simplest possible PDFBox program creates a one-page document and saves it to disk. A valid PDF must contain at least one page.
+
+```java CreateBlankPDF.java
+import java.io.IOException;
+
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+
+public final class CreateBlankPDF
+{
+    public static void main(String[] args) throws IOException
+    {
+        String filename = "blank.pdf";
+
+        try (PDDocument doc = new PDDocument())
+        {
+            // a valid PDF document requires at least one page
+            PDPage blankPage = new PDPage();
+            doc.addPage(blankPage);
+            doc.save(filename);
+        }
+    }
+}
+```
+
+`PDDocument` implements `AutoCloseable`, so wrapping it in a try-with-resources statement ensures the document and any underlying scratch files are closed correctly.
+
+</Step>
+
+<Step title="Write text to a PDF">
+
+To add content to a page, open a `PDPageContentStream` and use the text operators. The example below uses the built-in Helvetica Bold font from the PDF standard-14 set, which requires no font embedding.
+
+```java HelloWorld.java
+import java.io.IOException;
+
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
+
+public final class HelloWorld
+{
+    public static void main(String[] args) throws IOException
+    {
+        String filename = "hello.pdf";
+        String message  = "Hello, PDFBox!";
+
+        try (PDDocument doc = new PDDocument())
+        {
+            PDPage page = new PDPage();
+            doc.addPage(page);
+
+            PDFont font = new PDType1Font(FontName.HELVETICA_BOLD);
+
+            try (PDPageContentStream contents = new PDPageContentStream(doc, page))
+            {
+                contents.beginText();
+                contents.setFont(font, 12);
+                contents.newLineAtOffset(100, 700);
+                contents.showText(message);
+                contents.endText();
+            }
+
+            doc.save(filename);
+        }
+    }
+}
+```
+
+Coordinates in PDFBox follow the PDF convention: the origin `(0, 0)` is at the bottom-left corner of the page, and Y increases upward. An A4 page is 595 × 842 points; a US Letter page is 612 × 792 points.
+
+</Step>
+
+<Step title="Extract text from a PDF">
+
+Use `Loader.loadPDF()` to open an existing PDF, then `PDFTextStripper` to extract the text. The example below iterates page-by-page and prints each page's content to standard output.
+
+```java ExtractTextSimple.java
+import java.io.File;
+import java.io.IOException;
+
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+import org.apache.pdfbox.text.PDFTextStripper;
+
+public class ExtractTextSimple
+{
+    public static void main(String[] args) throws IOException
+    {
+        if (args.length != 1)
+        {
+            System.err.println("Usage: java ExtractTextSimple <input-pdf>");
+            System.exit(-1);
+        }
+
+        try (PDDocument document = Loader.loadPDF(new File(args[0])))
+        {
+            AccessPermission ap = document.getCurrentAccessPermission();
+            if (!ap.canExtractContent())
+            {
+                throw new IOException("You do not have permission to extract text");
+            }
+
+            PDFTextStripper stripper = new PDFTextStripper();
+
+            // Sorting by position helps with multi-column layouts. In some
+            // files it can change the order — disable if results look wrong.
+            stripper.setSortByPosition(true);
+
+            for (int p = 1; p <= document.getNumberOfPages(); ++p)
+            {
+                // Extract one page at a time
+                stripper.setStartPage(p);
+                stripper.setEndPage(p);
+
+                String text = stripper.getText(document);
+
+                String pageStr = String.format("page %d:", p);
+                System.out.println(pageStr);
+                for (int i = 0; i < pageStr.length(); ++i)
+                {
+                    System.out.print("-");
+                }
+                System.out.println();
+                System.out.println(text.trim());
+                System.out.println();
+            }
+        }
+    }
+}
+```
+
+<Warning>
+In PDFBox 3.x, use `Loader.loadPDF()` to open documents — **not** `PDDocument.load()`, which was removed in 3.0. See the [migration guide](/migration) for the full list of breaking changes.
+</Warning>
+
+</Step>
+
+<Step title="Build and run">
+
+Compile and run with Maven:
+
+```bash
+# Compile
+mvn compile
+
+# Run the blank PDF creator
+mvn exec:java -Dexec.mainClass="CreateBlankPDF"
+
+# Run text extraction on an existing PDF
+mvn exec:java -Dexec.mainClass="ExtractTextSimple" -Dexec.args="input.pdf"
+```
+
+Or build a fat JAR and run directly:
+
+```bash
+mvn package
+java -cp target/my-app.jar ExtractTextSimple input.pdf
+```
+
+You should see each page's text printed to the console. If a page prints empty or garbled characters, the PDF may use a non-standard font encoding. Consult the [text extraction guide](/guides/text-extraction) for troubleshooting steps.
+
+</Step>
+
+</Steps>
+
+<Tip>
+Ready for more? Continue with the core guides:
+
+- [Creating PDFs](/guides/creating-pdfs) — add images, shapes, and custom fonts
+- [Text extraction](/guides/text-extraction) — region-based extraction, sorting, and encoding issues
+- [Rendering](/guides/rendering) — convert pages to PNG/TIFF images at custom DPI
+- [Migrating from 2.x](/migration) — if you are upgrading an existing project
+</Tip>

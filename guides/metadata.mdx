@@ -1,0 +1,102 @@
+---
+title: "Reading and writing PDF metadata with PDFBox"
+description: "Access and update PDF document information fields like title, author, and creation date, and embed XMP metadata streams using PDFBox and XMPBox."
+---
+
+PDFs store descriptive metadata in two places: the document information dictionary (a simple key-value store in the PDF trailer) and an optional XMP metadata stream attached to the document catalog. PDFBox exposes the information dictionary through `PDDocumentInformation`, which provides typed getter and setter methods for all standard fields. For richer, standards-compliant metadata, the separate XMPBox module handles XMP streams.
+
+## Document information dictionary
+
+`PDDocumentInformation` wraps the `/Info` dictionary in the PDF trailer. Each method returns `null` if the corresponding entry is absent; passing `null` to a setter removes the entry.
+
+| Method | Type | Description |
+|---|---|---|
+| `getTitle()` / `setTitle(String)` | `String` | Document title |
+| `getAuthor()` / `setAuthor(String)` | `String` | Author name |
+| `getSubject()` / `setSubject(String)` | `String` | Document subject |
+| `getKeywords()` / `setKeywords(String)` | `String` | Keywords string |
+| `getCreator()` / `setCreator(String)` | `String` | Creating application |
+| `getProducer()` / `setProducer(String)` | `String` | PDF producer |
+| `getCreationDate()` / `setCreationDate(Calendar)` | `Calendar` | Creation timestamp |
+| `getModificationDate()` / `setModificationDate(Calendar)` | `Calendar` | Last-modified timestamp |
+| `getTrapped()` / `setTrapped(String)` | `String` | `"True"`, `"False"`, or `"Unknown"` |
+| `getCustomMetadataValue(String)` / `setCustomMetadataValue(String, String)` | `String` | Arbitrary custom fields |
+
+## Reading metadata
+
+Load a PDF and call `getDocumentInformation()` on the `PDDocument` to retrieve the `PDDocumentInformation` object:
+
+```java
+try (PDDocument document = Loader.loadPDF(new File("input.pdf")))
+{
+    PDDocumentInformation info = document.getDocumentInformation();
+
+    System.out.println("Title:    " + info.getTitle());
+    System.out.println("Author:   " + info.getAuthor());
+    System.out.println("Subject:  " + info.getSubject());
+    System.out.println("Keywords: " + info.getKeywords());
+    System.out.println("Creator:  " + info.getCreator());
+    System.out.println("Producer: " + info.getProducer());
+
+    if (info.getCreationDate() != null)
+    {
+        System.out.println("Created:  " + info.getCreationDate().getTime());
+    }
+    if (info.getModificationDate() != null)
+    {
+        System.out.println("Modified: " + info.getModificationDate().getTime());
+    }
+}
+```
+
+## Writing metadata
+
+The `AddMetadataFromDocInfo` example shows how to populate information dictionary fields and save the result:
+
+```java AddMetadataFromDocInfo.java
+try (PDDocument document = Loader.loadPDF(new File(args[0])))
+{
+    PDDocumentInformation info = document.getDocumentInformation();
+
+    info.setTitle("My Document Title");
+    info.setAuthor("Jane Smith");
+    info.setSubject("PDFBox metadata example");
+    info.setKeywords("pdfbox, metadata, java");
+    info.setCreator("MyApp 1.0");
+    info.setCreationDate(new GregorianCalendar());
+
+    document.save(args[1]);
+}
+```
+
+## XMP metadata
+
+For ISO-standard metadata interoperability, PDFs can carry an XMP stream on the document catalog. The `AddMetadataFromDocInfo` example demonstrates how to build an XMP packet from the information dictionary values using the XMPBox module:
+
+```java AddMetadataFromDocInfo.java
+XMPMetadata metadata = XMPMetadata.createXMPMetadata();
+
+AdobePDFSchema pdfSchema = metadata.createAndAddAdobePDFSchema();
+pdfSchema.setKeywords(info.getKeywords());
+pdfSchema.setProducer(info.getProducer());
+
+XMPBasicSchema basicSchema = metadata.createAndAddXMPBasicSchema();
+basicSchema.setCreateDate(info.getCreationDate());
+basicSchema.setModifyDate(info.getModificationDate());
+basicSchema.setCreatorTool(info.getCreator());
+
+DublinCoreSchema dcSchema = metadata.createAndAddDublinCoreSchema();
+dcSchema.setTitle(info.getTitle());
+dcSchema.setDescription(info.getSubject());
+dcSchema.addCreator("PDFBox");
+
+PDMetadata metadataStream = new PDMetadata(document);
+catalog.setMetadata(metadataStream);
+
+XmpSerializer serializer = new XmpSerializer();
+ByteArrayOutputStream baos = new ByteArrayOutputStream();
+serializer.serialize(metadata, baos, false);
+metadataStream.importXMPMetadata(baos.toByteArray());
+```
+
+For full XMP support, including reading and writing all XMP schemas, see the [XMPBox module](/modules/xmpbox). XMPBox is a separate artifact (`org.apache.pdfbox:xmpbox`) that provides schema classes for Dublin Core, XMP Basic, Adobe PDF, and other standard namespaces.

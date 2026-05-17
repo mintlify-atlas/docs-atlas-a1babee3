@@ -1,0 +1,74 @@
+---
+title: "Apache PDFBox: open source Java PDF library"
+description: "Apache PDFBox is an open source Java library for PDF creation, text extraction, rendering, and manipulation. Requires Java 11+, licensed Apache 2.0."
+---
+
+Apache PDFBox is an open source Java library for working with PDF documents. Published by the Apache Software Foundation under the Apache License, Version 2.0, it gives you the tools to create new PDFs, modify existing ones, extract text and images, render pages to images, and more — all from pure Java code. This documentation covers the PDFBox 3.x API, module structure, setup, and common workflows.
+
+## What is PDFBox?
+
+PDFBox is a project of the [Apache Software Foundation](https://www.apache.org/). It has been under active development since 2002 and is widely used in enterprise applications for PDF processing. The library is entirely open source, carries no per-use fees, and imposes no restrictions on commercial use beyond the terms of the Apache License 2.0.
+
+The library handles a broad range of PDF operations: from generating simple documents to parsing complex forms, from extracting plain text to rendering high-fidelity page images. PDFBox also includes command-line utilities so you can perform common operations without writing any Java code.
+
+## Key capabilities
+
+<CardGroup cols={2}>
+  <Card title="Create PDF documents" icon="file-plus">
+    Build PDFs from scratch using a page model API. Add text, images, vector graphics, and embedded fonts to new or existing documents.
+  </Card>
+  <Card title="Extract text and content" icon="text">
+    Pull text from any page using `PDFTextStripper`, extract embedded images, and inspect document metadata and XMP properties.
+  </Card>
+  <Card title="Render pages to images" icon="image">
+    Convert PDF pages to `BufferedImage` at arbitrary DPI using `PDFRenderer`. Useful for thumbnail generation, print preview, and OCR pipelines.
+  </Card>
+  <Card title="Manipulate existing PDFs" icon="pen-to-square">
+    Merge documents, split pages, add annotations, fill AcroForm fields, apply watermarks, and perform incremental saves.
+  </Card>
+  <Card title="Digital signatures" icon="signature">
+    Create and verify digital signatures, including visible signatures, time-stamped signatures, and long-term validation (LTV).
+  </Card>
+  <Card title="Encryption and security" icon="lock">
+    Encrypt PDFs with RC4 or AES (128-bit or 256-bit), set access permissions, and decrypt documents using owner or user passwords.
+  </Card>
+</CardGroup>
+
+## Module structure
+
+PDFBox 3.x is split into focused Maven modules. Most applications only need the `pdfbox` artifact as a direct dependency; the others are pulled in transitively or used for specialized tasks.
+
+| Module | Artifact ID | Purpose |
+|---|---|---|
+| Core library | `pdfbox` | Main PDF API — document model, text extraction, rendering, forms |
+| Font handling | `fontbox` | TrueType, Type 1, and CFF font parsing; used internally by `pdfbox` |
+| XMP metadata | `xmpbox` | Read and write XMP metadata streams |
+| I/O primitives | `pdfbox-io` | Low-level `RandomAccessRead` abstractions; split from core in 3.x |
+| Command-line tools | `tools` | `ExtractText`, `PDFToImage`, `Encrypt`, and other CLI utilities |
+
+The `debugger` and `app` modules provide a PDF viewer/debugger desktop application and are not needed for library usage.
+
+## System requirements
+
+- **Java**: Java 11 or higher is required to compile and run PDFBox 3.x.
+- **Build tool**: Maven 3.6.3 or higher. Gradle is also supported.
+- **Dependencies**: PDFBox uses [Bouncy Castle](https://www.bouncycastle.org/) for cryptographic operations (encryption, digital signatures). SLF4J-compatible logging is used throughout; wire in any SLF4J binding (e.g. Log4j 2, Logback) for log output.
+
+## License and support
+
+PDFBox is released under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0). You can use it freely in both open source and commercial products.
+
+<CardGroup cols={2}>
+  <Card title="Users mailing list" icon="envelope" href="https://pdfbox.apache.org/mailinglists.html">
+    Ask questions and get help from the PDFBox community.
+  </Card>
+  <Card title="Issue tracker" icon="bug" href="https://issues.apache.org/jira/browse/PDFBOX">
+    Report bugs and request features on the Apache JIRA.
+  </Card>
+  <Card title="Source code" icon="code" href="https://github.com/apache/pdfbox">
+    Browse the source on GitHub, including the examples subproject.
+  </Card>
+  <Card title="Downloads" icon="download" href="https://pdfbox.apache.org/download.cgi">
+    Download binary releases and standalone application JARs.
+  </Card>
+</CardGroup>

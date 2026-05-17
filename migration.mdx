@@ -1,0 +1,239 @@
+---
+title: "Migrating from PDFBox 2.x to 3.x"
+description: "A practical guide to the breaking API changes in PDFBox 3.0: new groupId, the Loader API, RandomAccessRead, the pdfbox-io module split, and removed classes."
+---
+
+PDFBox 3.0 is a major release with a significant number of API-level breaking changes, many of which affect code that simply opens or saves a PDF. The changes were made to improve memory efficiency, reduce I/O overhead, and clean up the public API after years of accumulated deprecated code. This guide covers the changes you are most likely to encounter and shows you what to update.
+
+<Warning>
+PDFBox 3.x requires **Java 11 or higher**. If you are still on Java 8, you must stay on the 2.x line.
+</Warning>
+
+## Dependency changes
+
+The Maven `groupId` changed in PDFBox 3.0. You must update every `pdfbox` dependency in your build file.
+
+<Warning>
+Using the old 2.x `groupId` after migrating will resolve the wrong library version from Maven Central.
+</Warning>
+
+<CodeGroup>
+
+```xml Before (2.x) — pom.xml
+<dependency>
+    <groupId>org.apache.pdfbox</groupId>
+    <artifactId>pdfbox</artifactId>
+    <version>2.0.31</version>
+</dependency>
+```
+
+```xml After (3.x) — pom.xml
+<dependency>
+    <groupId>org.apache.pdfbox</groupId>
+    <artifactId>pdfbox</artifactId>
+    <version>3.0.0</version>
+</dependency>
+```
+
+</CodeGroup>
+
+<Note>
+The `groupId` value `org.apache.pdfbox` is the same in both 2.x and 3.x. What changed is that the `io` functionality was extracted into a separate `pdfbox-io` artifact (see below). No `groupId` change is required — but you may need to add the new `pdfbox-io` dependency if your code directly uses `RandomAccessRead`.
+</Note>
+
+### New pdfbox-io module
+
+In 3.0, the I/O primitives (`RandomAccessRead`, `RandomAccessReadBuffer`, `RandomAccessReadBufferedFile`, and related classes) were moved from `org.apache.pdfbox.io` inside the `pdfbox` JAR into a dedicated Maven module: `pdfbox-io`. The `pdfbox` artifact declares a compile dependency on `pdfbox-io`, so most projects do **not** need to add it explicitly. If your code imports classes from `org.apache.pdfbox.io` directly, add:
+
+```xml pom.xml
+<dependency>
+    <groupId>org.apache.pdfbox</groupId>
+    <artifactId>pdfbox-io</artifactId>
+    <version>3.0.0</version>
+</dependency>
+```
+
+---
+
+## Loader API replaces PDDocument.load()
+
+The most common breaking change for 2.x users is that `PDDocument.load(...)` has been removed. In 3.0, all documents must be opened through the `org.apache.pdfbox.Loader` class.
+
+<Warning>
+`PDDocument.load()` does not exist in PDFBox 3.x. Any call to it will fail to compile.
+</Warning>
+
+### Loading from a File
+
+```java Before (2.x)
+import org.apache.pdfbox.pdmodel.PDDocument;
+
+PDDocument document = PDDocument.load(new File("input.pdf"));
+```
+
+```java After (3.x)
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+
+PDDocument document = Loader.loadPDF(new File("input.pdf"));
+```
+
+### Loading from a byte array
+
+```java Before (2.x)
+byte[] bytes = ...;
+PDDocument document = PDDocument.load(bytes);
+```
+
+```java After (3.x)
+byte[] bytes = ...;
+PDDocument document = Loader.loadPDF(bytes);
+```
+
+### Loading from an InputStream
+
+Direct `InputStream` loading is no longer supported in `Loader.loadPDF()` in PDFBox 3.x (it was removed to avoid ambiguity with the `RandomAccessRead` overload). Wrap your stream in a `RandomAccessReadBuffer` first:
+
+```java Before (2.x)
+InputStream is = ...;
+PDDocument document = PDDocument.load(is);
+```
+
+```java After (3.x)
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.io.RandomAccessReadBuffer;
+
+InputStream is = ...;
+try (RandomAccessReadBuffer buffer = new RandomAccessReadBuffer(is))
+{
+    PDDocument document = Loader.loadPDF(buffer);
+    // use document...
+}
+```
+
+### Loading with a password
+
+```java Before (2.x)
+PDDocument document = PDDocument.load(new File("encrypted.pdf"), "password");
+```
+
+```java After (3.x)
+PDDocument document = Loader.loadPDF(new File("encrypted.pdf"), "password");
+```
+
+---
+
+## RandomAccessRead changes
+
+PDFBox 3.0 introduced `org.apache.pdfbox.io.RandomAccessRead` as the primary abstraction for reading PDF data. Two concrete implementations cover the most common use cases:
+
+| Class | When to use |
+|---|---|
+| `RandomAccessReadBufferedFile` | Reading from a file on disk — memory-efficient, uses NIO |
+| `RandomAccessReadBuffer` | Reading from a byte array or `InputStream` loaded into memory |
+
+If your custom parsing code previously extended `RandomAccessBufferedFileInputStream` or `SequentialSource`, you now implement `RandomAccessRead` instead.
+
+```java After (3.x) — reading from a file via RandomAccessRead
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.io.RandomAccessRead;
+import org.apache.pdfbox.io.RandomAccessReadBufferedFile;
+import org.apache.pdfbox.pdmodel.PDDocument;
+
+try (RandomAccessRead raFile = new RandomAccessReadBufferedFile(new File("input.pdf")))
+{
+    PDDocument document = Loader.loadPDF(raFile);
+    // use document...
+}
+```
+
+<Warning>
+`RandomAccessRead` is not closed automatically by `Loader.loadPDF()` when the returned `PDDocument` is closed. If you construct a `RandomAccessRead` directly, you are responsible for closing it.
+</Warning>
+
+---
+
+## Removed and renamed classes
+
+PDFBox 3.0 deleted a large amount of deprecated API that had been marked for removal since 2.x. The table below lists the most commonly used removals.
+
+<AccordionGroup>
+
+<Accordion title="PDDocument changes">
+
+| Removed in 3.x | Replacement |
+|---|---|
+| `PDDocument.load(File)` | `Loader.loadPDF(File)` |
+| `PDDocument.load(InputStream)` | `Loader.loadPDF(new RandomAccessReadBuffer(stream))` |
+| `PDDocument.load(byte[])` | `Loader.loadPDF(byte[])` |
+| `PDDocument.setAllSecurityToBeRemoved(boolean)` | Pass an empty password to `Loader.loadPDF` |
+
+</Accordion>
+
+<Accordion title="I/O class renames and moves">
+
+| Removed / renamed in 3.x | Replacement |
+|---|---|
+| `RandomAccessFile` (pdfbox package) | `RandomAccessReadBufferedFile` (pdfbox-io module) |
+| `RandomAccessBuffer` (old) | `RandomAccessReadBuffer` (pdfbox-io module) |
+| `RandomAccessBufferedFileInputStream` | `RandomAccessReadBufferedFile` |
+| `SequentialSource` | `RandomAccessRead` interface |
+| `ScratchFile` / `ScratchFileBuffer` | `RandomAccessReadWriteBuffer` (default in-memory scratch) |
+
+All new classes live in `org.apache.pdfbox.io`.
+
+</Accordion>
+
+<Accordion title="MemoryUsageSetting changes">
+
+In 2.x, `PDDocument.load()` accepted a `MemoryUsageSetting` parameter to control whether temporary data was stored in memory or on disk. In 3.x, this is controlled by passing a `StreamCacheCreateFunction` to the `Loader.loadPDF()` overloads.
+
+```java After (3.x) — custom stream cache
+import org.apache.pdfbox.io.IOUtils;
+import org.apache.pdfbox.io.RandomAccessStreamCache.StreamCacheCreateFunction;
+
+// Memory-only (default behaviour)
+StreamCacheCreateFunction memoryCache = IOUtils.createMemoryOnlyStreamCache();
+PDDocument document = Loader.loadPDF(new File("input.pdf"), "", memoryCache);
+```
+
+</Accordion>
+
+<Accordion title="Font API changes">
+
+`PDType1Font` built-in font constants (e.g. `PDType1Font.HELVETICA`) were removed. Use the `Standard14Fonts.FontName` enum instead:
+
+```java Before (2.x)
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+
+PDFont font = PDType1Font.HELVETICA_BOLD;
+```
+
+```java After (3.x)
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
+
+PDFont font = new PDType1Font(FontName.HELVETICA_BOLD);
+```
+
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Summary checklist
+
+Use this checklist when updating a 2.x project to 3.x:
+
+- Replace every `PDDocument.load(...)` call with the corresponding `Loader.loadPDF(...)` overload.
+- Add `import org.apache.pdfbox.Loader;` wherever you open a PDF.
+- If you load from an `InputStream`, wrap it: `new RandomAccessReadBuffer(stream)`.
+- Replace `PDType1Font.HELVETICA` (and similar constants) with `new PDType1Font(FontName.HELVETICA)`.
+- If you depend directly on `RandomAccessBuffer`, `RandomAccessFile`, or `SequentialSource`, update imports to the new `org.apache.pdfbox.io` classes.
+- Update your `pdfbox` dependency version to `3.0.0`.
+- Verify your JDK is Java 11 or higher.
+
+<Tip>
+The official migration guide is available at [pdfbox.apache.org/3.0/migration.html](https://pdfbox.apache.org/3.0/migration.html) and is updated with community feedback.
+</Tip>

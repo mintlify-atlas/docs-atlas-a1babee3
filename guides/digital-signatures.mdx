@@ -1,0 +1,133 @@
+---
+title: "Apply digital signatures to PDFs with PDFBox"
+description: "Learn how to sign PDF documents using PKCS#12 keystores and Bouncy Castle, implement SignatureInterface, and verify existing signatures in PDFBox."
+---
+
+PDFBox supports applying cryptographic signatures to PDF documents through the `PDSignature` class and the `SignatureInterface` callback. Signing writes incrementally to the file, preserving the existing content while appending the new signature revision. Verification reads the stored `PDSignature` dictionaries and validates the embedded PKCS#7 data.
+
+<Warning>
+  Digital signing requires Bouncy Castle on the classpath. Add `bcprov-jdk18on` and `bcpkix-jdk18on` to your build. Without these artifacts, `CMSSignedDataGenerator` and related classes will not be available.
+</Warning>
+
+## Signing prerequisites
+
+Before signing, you need a PKCS#12 keystore containing a private key and certificate chain. You can generate a self-signed keystore with the Java `keytool`:
+
+```bash keytool
+keytool -genkeypair -storepass 123456 -storetype pkcs12 \
+  -alias test -validity 365 -v -keyalg RSA -keystore keystore.p12
+```
+
+Load the keystore in your application before constructing the signing class:
+
+```java CreateSignature.java
+KeyStore keystore = KeyStore.getInstance("PKCS12");
+char[] password = "123456".toCharArray();
+try (InputStream is = new FileInputStream("keystore.p12"))
+{
+    keystore.load(is, password);
+}
+```
+
+## Implementing SignatureInterface
+
+PDFBox calls `SignatureInterface.sign(InputStream content)` with the byte ranges of the document that are covered by the signature. Your implementation must return the DER-encoded PKCS#7 `SignedData` structure. The `CreateSignatureBase` class from the examples shows the canonical pattern using Bouncy Castle:
+
+```java CreateSignatureBase.java
+@Override
+public byte[] sign(InputStream content) throws IOException
+{
+    try
+    {
+        CMSSignedDataGenerator gen = new CMSSignedDataGenerator();
+        X509Certificate cert = (X509Certificate) certificateChain[0];
+        ContentSigner sha1Signer = new JcaContentSignerBuilder(cert.getSigAlgName()).build(privateKey);
+        gen.addSignerInfoGenerator(
+            new JcaSignerInfoGeneratorBuilder(
+                new JcaDigestCalculatorProviderBuilder().build()
+            ).build(sha1Signer, cert));
+        gen.addCertificates(new JcaCertStore(Arrays.asList(certificateChain)));
+        CMSProcessableInputStream msg = new CMSProcessableInputStream(content);
+        CMSSignedData signedData = gen.generate(msg, false);
+        return signedData.getEncoded();
+    }
+    catch (GeneralSecurityException | CMSException | OperatorCreationException e)
+    {
+        throw new IOException(e);
+    }
+}
+```
+
+The constructor extracts the private key and certificate chain from the keystore, and calls `checkValidity()` on the signing certificate to catch expired credentials early.
+
+## Signing a document
+
+<Steps>
+  <Step title="Create a PDSignature dictionary">
+    Configure the filter, sub-filter, and optional display fields. Set the signing date — it is required for a valid signature.
+
+    ```java CreateSignature.java
+    PDSignature signature = new PDSignature();
+    signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
+    signature.setSubFilter(PDSignature.SUBFILTER_ADBE_PKCS7_DETACHED);
+    signature.setName("Example User");
+    signature.setLocation("Los Angeles, CA");
+    signature.setReason("Testing");
+    signature.setSignDate(Calendar.getInstance());
+    ```
+  </Step>
+
+  <Step title="Register the signature and save incrementally">
+    Pass the signature dictionary and your `SignatureInterface` implementation to `addSignature`, then call `saveIncremental`. The incremental save appends only the new revision, keeping the signed byte ranges intact.
+
+    ```java CreateSignature.java
+    SignatureOptions signatureOptions = new SignatureOptions();
+    signatureOptions.setPreferredSignatureSize(SignatureOptions.DEFAULT_SIGNATURE_SIZE * 2);
+
+    document.addSignature(signature, this, signatureOptions);
+    document.saveIncremental(output);
+    ```
+  </Step>
+
+  <Step title="Open the document and sign">
+    Load the input file with `Loader.loadPDF`, write to an `FileOutputStream`, then let your signer class drive the process:
+
+    ```java CreateSignature.java
+    try (FileOutputStream fos = new FileOutputStream(outFile);
+         PDDocument doc = Loader.loadPDF(inFile))
+    {
+        signDetached(doc, fos);
+    }
+    ```
+  </Step>
+</Steps>
+
+## Verifying signatures
+
+To inspect existing signatures, iterate `document.getSignatureDictionaries()`. Each `PDSignature` exposes the name, date, sub-filter, and raw `Contents` bytes:
+
+```java ShowSignature.java
+for (PDSignature sig : document.getSignatureDictionaries())
+{
+    if (sig.getName() != null)
+    {
+        System.out.println("Name:     " + sig.getName());
+    }
+    if (sig.getSignDate() != null)
+    {
+        System.out.println("Modified: " + sdf.format(sig.getSignDate().getTime()));
+    }
+
+    String subFilter = sig.getSubFilter();
+    byte[] contents = sig.getContents();
+
+    try (InputStream signedContentAsStream =
+             new COSFilterInputStream(fis, sig.getByteRange()))
+    {
+        // validate contents against subFilter type
+        // e.g. "adbe.pkcs7.detached" -> verifyPKCS7(...)
+    }
+}
+```
+
+Use `sig.getByteRange()` to obtain the four-integer array that describes which byte ranges of the file are covered. A signature that does not cover the entire file may indicate subsequent modifications.

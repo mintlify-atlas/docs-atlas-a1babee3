@@ -1,0 +1,121 @@
+---
+title: "Working with PDF forms (AcroForms) in PDFBox"
+description: "Read, fill, create, and flatten AcroForm fields in PDF documents using PDFBox. Covers PDAcroForm, PDTextField, PDCheckBox, radio buttons, and form flattening."
+---
+
+PDF interactive forms are stored as AcroForms — a tree of `PDField` objects attached to the document catalog. PDFBox exposes this structure through `PDAcroForm`, which lets you enumerate fields, read their values, set new values, and flatten the form into static page content. Understanding field names is key: nested fields use dot-separated fully qualified names such as `"fieldsContainer.nestedSampleField"`.
+
+<Tip>
+  Use `acroForm.getField("fullyQualifiedName")` to access nested fields directly. The fully qualified name is the dot-joined path from the root of the field tree to the target field — for example, `"address.city"`.
+</Tip>
+
+## Reading form fields
+
+Load the document and retrieve the `PDAcroForm` from the document catalog. `getFields()` returns the top-level fields; nested fields are children of `PDNonTerminalField` nodes.
+
+```java PrintFields.java
+PDDocument pdf = Loader.loadPDF(new File("form.pdf"));
+PDDocumentCatalog docCatalog = pdf.getDocumentCatalog();
+PDAcroForm acroForm = docCatalog.getAcroForm();
+List<PDField> fields = acroForm.getFields();
+
+System.out.println(fields.size() + " top-level fields were found on the form");
+
+for (PDField field : fields)
+{
+    String partialName = field.getPartialName();
+    String fieldValue = field.getValueAsString();
+    System.out.println(partialName + " = " + fieldValue
+        + ",  type=" + field.getClass().getName());
+
+    if (field instanceof PDNonTerminalField)
+    {
+        for (PDField child : ((PDNonTerminalField) field).getChildren())
+        {
+            System.out.println("  child: " + child.getPartialName());
+        }
+    }
+}
+```
+
+## Filling a text field
+
+Look up a field by its fully qualified name, cast it to `PDTextField`, and call `setValue`. PDFBox regenerates the field's appearance stream automatically.
+
+```java FillFormField.java
+try (PDDocument pdfDocument = Loader.loadPDF(new File("form.pdf")))
+{
+    PDAcroForm acroForm = pdfDocument.getDocumentCatalog().getAcroForm();
+
+    if (acroForm != null)
+    {
+        // top-level field
+        PDTextField field = (PDTextField) acroForm.getField("sampleField");
+        field.setValue("Text Entry");
+
+        // nested field accessed by fully qualified name
+        field = (PDTextField) acroForm.getField("fieldsContainer.nestedSampleField");
+        field.setValue("Text Entry");
+    }
+
+    pdfDocument.save("filled.pdf");
+}
+```
+
+## Creating a form from scratch
+
+Building an AcroForm requires a `PDAcroForm` instance, a font resource registered under a known name (Acrobat uses `/Helv`), and one or more `PDTextField` widgets linked to a page annotation.
+
+```java CreateSimpleForm.java
+try (PDDocument document = new PDDocument())
+{
+    PDPage page = new PDPage(PDRectangle.A4);
+    document.addPage(page);
+
+    // register font resource
+    PDFont font = new PDType1Font(FontName.HELVETICA);
+    PDResources resources = new PDResources();
+    resources.put(COSName.HELV, font);
+
+    // create AcroForm and attach to document
+    PDAcroForm acroForm = new PDAcroForm(document);
+    document.getDocumentCatalog().setAcroForm(acroForm);
+    acroForm.setDefaultResources(resources);
+    acroForm.setDefaultAppearance("/Helv 0 Tf 0 g"); // auto-size font
+
+    // create text field
+    PDTextField textBox = new PDTextField(acroForm);
+    textBox.setPartialName("SampleField");
+    textBox.setDefaultAppearance("/Helv 12 Tf 0 0 1 rg"); // 12pt blue
+    textBox.setQ(PDVariableText.QUADDING_CENTERED);
+    acroForm.getFields().add(textBox);
+
+    // attach widget annotation to page
+    PDAnnotationWidget widget = textBox.getWidgets().get(0);
+    widget.setRectangle(new PDRectangle(50, 750, 200, 50));
+    widget.setPage(page);
+    widget.setPrinted(true);
+    page.getAnnotations().add(widget);
+
+    // set an initial value
+    textBox.setValue("Sample field content");
+
+    document.save("SimpleForm.pdf");
+}
+```
+
+## Flattening a form
+
+Flattening merges field appearances into the page content stream and removes the interactive form structure, producing a static document that renders consistently across all viewers.
+
+```java
+try (PDDocument document = Loader.loadPDF(new File("filled.pdf")))
+{
+    PDAcroForm acroForm = document.getDocumentCatalog().getAcroForm();
+    if (acroForm != null)
+    {
+        acroForm.flatten();
+    }
+    document.save("flattened.pdf");
+}
+```

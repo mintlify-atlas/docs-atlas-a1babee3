@@ -1,0 +1,236 @@
+---
+title: "Encrypt and decrypt PDF documents with PDFBox"
+description: "Protect PDF files with password-based or public-key encryption, control access permissions, and decrypt documents using PDFBox's encryption APIs."
+---
+
+PDFBox supports two encryption schemes defined in the PDF specification: standard password-based encryption using `StandardProtectionPolicy`, and public-key (certificate-based) encryption using `PublicKeyProtectionPolicy`. Both schemes let you control what operations a recipient can perform on the document through `AccessPermission`.
+
+<Warning>
+PDFBox's encryption support requires the Bouncy Castle security library. Add the following dependency to your project:
+
+```xml pom.xml
+<dependency>
+    <groupId>org.bouncycastle</groupId>
+    <artifactId>bcprov-jdk18on</artifactId>
+    <version>1.78.1</version>
+</dependency>
+<dependency>
+    <groupId>org.bouncycastle</groupId>
+    <artifactId>bcpkix-jdk18on</artifactId>
+    <version>1.78.1</version>
+</dependency>
+```
+</Warning>
+
+## Password (standard) encryption
+
+`StandardProtectionPolicy` encrypts a document with an owner password and a user password. The owner password grants full access; the user password opens the document subject to the access permissions you set.
+
+```java StandardEncryption.java
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
+
+try (PDDocument document = Loader.loadPDF(new File("input.pdf")))
+{
+    AccessPermission ap = new AccessPermission();
+    ap.setCanModify(false);
+    ap.setCanExtractContent(false);
+    ap.setCanPrint(true);
+
+    // StandardProtectionPolicy(ownerPassword, userPassword, permissions)
+    StandardProtectionPolicy policy =
+        new StandardProtectionPolicy("owner_secret", "user_pass", ap);
+    policy.setEncryptionKeyLength(256); // 40, 128, or 256 bits
+
+    document.protect(policy);
+    document.save("encrypted.pdf");
+}
+```
+
+<Note>
+Always supply both an owner password and a user password. The owner password is required to remove or change encryption later.
+</Note>
+
+## Setting access permissions
+
+`AccessPermission` controls which operations are available to a user who opens the document with the user password. By default all permissions are granted; call the setter methods to restrict specific operations.
+
+| Method | Controls |
+|--------|----------|
+| `setCanPrint(boolean)` | Printing the document |
+| `setCanPrintFaithful(boolean)` | High-quality (faithful) printing |
+| `setCanModify(boolean)` | Modifying document content |
+| `setCanExtractContent(boolean)` | Copying or extracting text and images |
+| `setCanModifyAnnotations(boolean)` | Adding or modifying annotations and form fields |
+| `setCanFillInForm(boolean)` | Filling in interactive form fields |
+| `setCanExtractForAccessibility(boolean)` | Extracting content for accessibility tools |
+| `setCanAssembleDocument(boolean)` | Inserting, rotating, or deleting pages |
+
+```java AccessPermission.java
+AccessPermission ap = new AccessPermission();
+
+// Allow printing but prevent all modifications
+ap.setCanPrint(true);
+ap.setCanPrintFaithful(true);
+ap.setCanModify(false);
+ap.setCanModifyAnnotations(false);
+ap.setCanFillInForm(false);
+ap.setCanExtractContent(false);
+ap.setCanAssembleDocument(false);
+ap.setCanExtractForAccessibility(true); // typically left enabled for screen readers
+```
+
+To check the current permissions at runtime, use `isOwnerPermission()`, which returns `true` only if all permissions are enabled:
+
+```java CheckPermissions.java
+AccessPermission ap = new AccessPermission();
+boolean isUnrestricted = ap.isOwnerPermission();
+```
+
+## Decrypting a PDF
+
+To open an encrypted document, pass the password directly to `Loader.loadPDF`. To fully remove encryption and save a plain copy, set `setAllSecurityToBeRemoved(true)` — this requires the owner password.
+
+```java DecryptPDF.java
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+
+try (PDDocument document = Loader.loadPDF(new File("encrypted.pdf"), "owner_secret"))
+{
+    if (document.isEncrypted())
+    {
+        AccessPermission ap = document.getCurrentAccessPermission();
+        if (ap.isOwnerPermission())
+        {
+            document.setAllSecurityToBeRemoved(true);
+            document.save("decrypted.pdf");
+        }
+        else
+        {
+            System.err.println("Owner password required to remove encryption.");
+        }
+    }
+}
+```
+
+`document.getCurrentAccessPermission()` returns the permissions that were granted when the document was opened. You can inspect these before attempting any restricted operation.
+
+## Public-key encryption
+
+Public-key encryption lets you encrypt a document for one or more named recipients, each identified by their X.509 certificate. The recipient uses their private key (held in a keystore) to decrypt the document.
+
+<Tabs>
+  <Tab title="Encrypting">
+```java PublicKeyEncrypt.java
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+import org.apache.pdfbox.pdmodel.encryption.PublicKeyProtectionPolicy;
+import org.apache.pdfbox.pdmodel.encryption.PublicKeyRecipient;
+
+try (PDDocument document = Loader.loadPDF(new File("input.pdf"));
+     InputStream certStream = new FileInputStream("recipient.cer"))
+{
+    // Build per-recipient access permissions
+    AccessPermission ap = new AccessPermission();
+    ap.setCanModify(false);
+
+    PublicKeyRecipient recip = new PublicKeyRecipient();
+    recip.setPermission(ap);
+
+    // Load the recipient's X.509 certificate
+    CertificateFactory cf = CertificateFactory.getInstance("X.509");
+    X509Certificate certificate = (X509Certificate) cf.generateCertificate(certStream);
+    recip.setX509(certificate);
+
+    PublicKeyProtectionPolicy policy = new PublicKeyProtectionPolicy();
+    policy.addRecipient(recip);
+    policy.setEncryptionKeyLength(128); // 128 or 256 bits
+
+    document.protect(policy);
+    document.save("encrypted-pubkey.pdf");
+}
+```
+  </Tab>
+  <Tab title="Decrypting">
+```java PublicKeyDecrypt.java
+import java.security.KeyStore;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+
+// Load the recipient's PKCS12 keystore
+KeyStore keystore = KeyStore.getInstance("PKCS12");
+try (InputStream ksStream = new FileInputStream("recipient.p12"))
+{
+    keystore.load(ksStream, "keystore_password".toCharArray());
+}
+
+// Pass the keystore stream and alias to Loader.loadPDF
+try (InputStream ksStream = new FileInputStream("recipient.p12");
+     PDDocument document = Loader.loadPDF(
+         new File("encrypted-pubkey.pdf"),
+         "keystore_password",
+         ksStream,
+         null /* alias – null if keystore has a single entry */))
+{
+    document.setAllSecurityToBeRemoved(true);
+    document.save("decrypted.pdf");
+}
+```
+  </Tab>
+</Tabs>
+
+You can add multiple recipients to a single `PublicKeyProtectionPolicy`. Each recipient can have different `AccessPermission` settings:
+
+```java MultipleRecipients.java
+PublicKeyProtectionPolicy policy = new PublicKeyProtectionPolicy();
+
+// Recipient 1 – can print only
+PublicKeyRecipient recip1 = new PublicKeyRecipient();
+AccessPermission ap1 = new AccessPermission();
+ap1.setCanModify(false);
+recip1.setPermission(ap1);
+recip1.setX509(certificate1);
+policy.addRecipient(recip1);
+
+// Recipient 2 – full owner access
+PublicKeyRecipient recip2 = new PublicKeyRecipient();
+recip2.setPermission(AccessPermission.getOwnerAccessPermission());
+recip2.setX509(certificate2);
+policy.addRecipient(recip2);
+
+document.protect(policy);
+```
+
+## Checking encryption status
+
+Use `isEncrypted()` to test whether a loaded document is encrypted, and `getCurrentAccessPermission()` to retrieve the effective permissions for the current session.
+
+```java CheckEncryptionStatus.java
+try (PDDocument document = Loader.loadPDF(new File("document.pdf"), "password"))
+{
+    if (document.isEncrypted())
+    {
+        AccessPermission ap = document.getCurrentAccessPermission();
+
+        System.out.println("Can print: "           + ap.canPrint());
+        System.out.println("Can modify: "          + ap.canModify());
+        System.out.println("Can extract content: " + ap.canExtractContent());
+        System.out.println("Can fill forms: "      + ap.canFillInForm());
+        System.out.println("Owner access: "        + ap.isOwnerPermission());
+    }
+    else
+    {
+        System.out.println("Document is not encrypted.");
+    }
+}
+```
+
+<Tip>
+Calling `getCurrentAccessPermission()` on an unencrypted document returns an `AccessPermission` with all permissions granted (equivalent to owner access).
+</Tip>

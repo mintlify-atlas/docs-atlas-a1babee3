@@ -1,0 +1,73 @@
+---
+title: "PDFBox core module: PDF document API reference"
+description: "API reference for the Apache PDFBox core module — the main artifact for creating, reading, rendering, and manipulating PDF documents in Java."
+---
+
+The `pdfbox` module is the primary artifact of the Apache PDFBox project. It provides a high-level Java API for creating PDF documents from scratch, reading and modifying existing files, extracting text, rendering pages to images, and performing multi-document operations such as merging and splitting. Most applications need only this module as a dependency.
+
+## Dependency
+
+<CodeGroup>
+
+```xml Maven
+<dependency>
+  <groupId>org.apache.pdfbox</groupId>
+  <artifactId>pdfbox</artifactId>
+  <version>3.0.0</version>
+</dependency>
+```
+
+```groovy Gradle
+implementation 'org.apache.pdfbox:pdfbox:3.0.0'
+```
+
+</CodeGroup>
+
+## Core classes
+
+| Class | Package | Purpose |
+|---|---|---|
+| `PDDocument` | `pdmodel` | Represents a loaded or newly created PDF document |
+| `PDPage` | `pdmodel` | A single page in a PDF document |
+| `PDPageContentStream` | `pdmodel` | Writes text, graphics, and images to a page |
+| `PDPageTree` | `pdmodel` | Navigates the page tree of a document |
+| `PDFTextStripper` | `text` | Extracts plain text from a document |
+| `PDFTextStripperByArea` | `text` | Extracts text from a defined rectangular region |
+| `PDFRenderer` | `rendering` | Renders pages to `BufferedImage` |
+| `ImageType` | `rendering` | Colour depth constants for rendered images (e.g. `RGB`, `GRAY`, `ARGB`) |
+| `PDFMergerUtility` | `multipdf` | Merges multiple PDF documents into one |
+| `Splitter` | `multipdf` | Splits a document into individual single-page documents |
+| `Overlay` | `multipdf` | Overlays content from one PDF onto pages of another |
+| `Loader` | root | Entry point for loading a `PDDocument` from a file, stream, or byte array |
+
+## Package structure
+
+| Package | Contents |
+|---|---|
+| `pdmodel` | High-level document model — `PDDocument`, `PDPage`, `PDPageContentStream`, fonts, images, forms, annotations, and document metadata |
+| `text` | Text extraction — `PDFTextStripper` and `PDFTextStripperByArea` for plain-text output |
+| `rendering` | Page rendering — `PDFRenderer` and `ImageType` for converting pages to `BufferedImage` |
+| `multipdf` | Multi-document operations — merge, split, overlay, and page extraction utilities |
+| `cos` | Low-level COS (Carousel Object System) layer — the raw PDF object model; rarely used directly |
+| `filter` | Stream filter implementations (FlateDecode, DCTDecode, CCITTFax, etc.) used internally during read and write |
+
+<Note>
+For the vast majority of use cases, `pdfbox` is the only module you need to declare as a dependency. FontBox is pulled in transitively.
+</Note>
+
+## Related guides
+
+<CardGroup cols={2}>
+  <Card title="Creating PDFs" icon="file-plus" href="/guides/creating-pdfs">
+    Create documents, add pages, write text and embed images using `PDDocument` and `PDPageContentStream`.
+  </Card>
+  <Card title="Text extraction" icon="text" href="/guides/text-extraction">
+    Extract plain text with `PDFTextStripper` or target a specific region with `PDFTextStripperByArea`.
+  </Card>
+  <Card title="Rendering pages" icon="image" href="/guides/rendering">
+    Convert PDF pages to `BufferedImage` at any resolution using `PDFRenderer`.
+  </Card>
+  <Card title="PDF manipulation" icon="scissors" href="/guides/pdf-manipulation">
+    Merge, split, and overlay documents with the utilities in the `multipdf` package.
+  </Card>
+</CardGroup>

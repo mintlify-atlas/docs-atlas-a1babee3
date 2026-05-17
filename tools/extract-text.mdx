@@ -1,0 +1,65 @@
+---
+title: "ExtractText: extract text from PDF via command line"
+description: "Use the PDFBox export:text command to extract plain text, HTML, or Markdown from any PDF, with control over page range, encoding, and sorting."
+---
+
+The `export:text` command reads a PDF and writes its text content to a file. By default it produces a `.txt` file next to the input PDF, but it can also output HTML or Markdown, write to stdout, or append to an existing file. It handles password-protected documents, embedded PDFs, and rotated or skewed text via the `rotationMagic` mode.
+
+## Usage
+
+```bash
+java -jar pdfbox-app-3.0.0.jar export:text -i <input.pdf> [options]
+```
+
+## Options
+
+| Option           | Default        | Description                                                                          |
+| ---------------- | -------------- | ------------------------------------------------------------------------------------ |
+| `-i, --input`    | _(required)_   | Path to the input PDF file                                                           |
+| `-o, --output`   | _(auto)_       | Path for the output file; defaults to the input filename with `.txt`/`.html`/`.md`  |
+| `-password`      | _(none)_       | Password to open an encrypted PDF or certificate keystore                            |
+| `-encoding`      | `UTF-8`        | Output character encoding (e.g. `ISO-8859-1`, `UTF-16BE`)                           |
+| `-startPage`     | `1`            | First page to extract (1-based)                                                      |
+| `-endPage`       | _(all)_        | Last page to extract (1-based, inclusive)                                            |
+| `-html`          | `false`        | Output HTML instead of plain text (forces UTF-8 encoding)                            |
+| `-md`            | `false`        | Output Markdown instead of plain text                                                |
+| `-sort`          | `false`        | Sort text by position before writing                                                 |
+| `-ignoreBeads`   | `false`        | Disable bead-based text separation                                                   |
+| `-rotationMagic` | `false`        | Detect and handle rotated/skewed text per page (slower; ignored with `-html`)        |
+| `-alwaysNext`    | `false`        | Continue to the next page even if an `IOException` occurs (ignored with `-html`)     |
+| `-console`       | `false`        | Write output to stdout instead of a file                                             |
+| `-addFileName`   | `false`        | Prepend the PDF filename to the output text                                          |
+| `-append`        | `false`        | Open the output file in append mode                                                  |
+| `-debug`         | `false`        | Print timing information for each processing stage to stderr                         |
+
+<Note>
+`-html` and `-md` are mutually exclusive. `-html` always uses UTF-8 regardless of the `-encoding` value. `-encoding` is ignored when `-console` is set.
+</Note>
+
+## Examples
+
+Extract all text from a PDF to a `.txt` file alongside the source:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar export:text -i report.pdf
+```
+
+Extract pages 3 through 7 with position-sorted text, saved to a specific output file:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar export:text -i report.pdf -o pages3-7.txt \
+  -startPage 3 -endPage 7 -sort
+```
+
+Output HTML to stdout from a password-protected PDF:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar export:text -i protected.pdf -password secret \
+  -html -console
+```
+
+Extract with rotation handling for scanned documents containing angled text:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar export:text -i scanned.pdf -rotationMagic
+```

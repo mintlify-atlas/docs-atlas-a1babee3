@@ -1,0 +1,68 @@
+---
+title: "FontBox module: low-level font parsing for PDFBox"
+description: "API reference for Apache FontBox — the low-level font parsing library used internally by PDFBox to read TrueType, Type 1, CFF, and AFM font files."
+---
+
+FontBox is a low-level Java library for obtaining raw information from font files. It is used internally by PDFBox to parse and apply fonts when reading or writing PDF documents. You do not normally need to depend on FontBox directly; it is a transitive dependency of the `pdfbox` module.
+
+## Dependency
+
+<CodeGroup>
+
+```xml Maven
+<dependency>
+  <groupId>org.apache.pdfbox</groupId>
+  <artifactId>fontbox</artifactId>
+  <version>3.0.0</version>
+</dependency>
+```
+
+```groovy Gradle
+implementation 'org.apache.pdfbox:fontbox:3.0.0'
+```
+
+</CodeGroup>
+
+## Supported font formats
+
+FontBox covers the font formats most commonly encountered inside PDF files.
+
+| Format | Package | Description |
+|---|---|---|
+| TrueType / OpenType (TTF/OTF) | `ttf` | Full TrueType and OpenType parsing, including composite fonts and CID tables |
+| Type 1 | `type1` | Adobe Type 1 fonts, including PFB binary and PFA text variants |
+| CFF (Compact Font Format) | `cff` | OpenType CFF and standalone CFF/CFF2 font data |
+| AFM (Adobe Font Metrics) | `afm` | Font metrics files used for character width and kerning information |
+
+## Key classes
+
+| Class | Package | Purpose |
+|---|---|---|
+| `FontBoxFont` | root | Common interface implemented by all font types in FontBox |
+| `TrueTypeFont` | `ttf` | Parses TTF/OTF files; provides access to glyph outlines, tables, and metrics |
+| `Type1Font` | `type1` | Parses Type 1 fonts from PFB/PFA source |
+| `CFFFont` | `cff` | Parses CFF and CFF2 font data; exposes charstrings and private dicts |
+| `AFMParser` | `afm` | Reads Adobe Font Metrics files and exposes per-glyph width data |
+
+## When to use FontBox directly
+
+Most users interact with fonts through PDFBox's `PDFont` hierarchy (`PDType1Font`, `PDTrueTypeFont`, `PDType0Font`) and never need to import FontBox classes directly. Consider using FontBox directly when you need to:
+
+- Inspect raw glyph outlines or TTF table data outside of a PDF context
+- Implement custom font subsetting or glyph remapping logic
+- Parse standalone font files in a tool that does not use PDFBox's document model
+- Debug font rendering issues by examining CFF charstrings or TrueType `cmap` tables directly
+
+```java
+// Load a TrueType font file directly via FontBox
+try (InputStream is = new FileInputStream("Helvetica.ttf"))
+{
+    TrueTypeFont ttf = new TTFParser().parse(is);
+    System.out.println("Units per EM: " + ttf.getUnitsPerEm());
+    ttf.close();
+}
+```
+
+<Note>
+When working within PDFBox, load fonts using `PDType0Font.load()` or `PDTrueTypeFont.load()` rather than using FontBox classes directly. PDFBox handles subsetting and encoding automatically.
+</Note>

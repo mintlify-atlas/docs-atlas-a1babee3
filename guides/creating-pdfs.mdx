@@ -1,0 +1,261 @@
+---
+title: "Creating PDF documents with PDFBox"
+description: "Learn how to create PDF documents from scratch with PDFBox: add pages, write text with standard or embedded fonts, draw images and vector shapes, and control page size."
+---
+
+PDFBox lets you create PDF documents entirely in Java — from a single blank page to multi-page documents with formatted text, embedded images, and vector graphics. The core classes are `PDDocument`, `PDPage`, and `PDPageContentStream`.
+
+## Creating a new document
+
+A valid PDF must contain at least one page. Use `PDDocument` as a try-with-resources block so the document is always closed after saving.
+
+<Steps>
+  <Step title="Create a PDDocument and add a page">
+    ```java CreateBlankPDF.java
+    import org.apache.pdfbox.pdmodel.PDDocument;
+    import org.apache.pdfbox.pdmodel.PDPage;
+
+    try (PDDocument doc = new PDDocument())
+    {
+        // a valid PDF document requires at least one page
+        PDPage blankPage = new PDPage();
+        doc.addPage(blankPage);
+        doc.save("blank.pdf");
+    }
+    ```
+  </Step>
+  <Step title="Save and close">
+    Call `doc.save(filename)` before the try-with-resources block exits. The `close()` call is handled automatically. Never call `save()` after `close()`.
+  </Step>
+</Steps>
+
+<Note>
+`PDDocument` implements `Closeable`. Always use try-with-resources or call `close()` explicitly to release file handles and memory.
+</Note>
+
+## Writing text
+
+Use `PDPageContentStream` to draw text onto a page. You must call `beginText()` before writing and `endText()` when finished. Coordinates are in points measured from the lower-left corner of the page.
+
+### Using a standard Type 1 font
+
+```java HelloWorldType1.java
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
+
+try (PDDocument doc = new PDDocument())
+{
+    PDPage page = new PDPage();
+    doc.addPage(page);
+
+    try (PDPageContentStream contents = new PDPageContentStream(doc, page))
+    {
+        contents.beginText();
+        contents.setFont(new PDType1Font(FontName.HELVETICA), 12);
+        contents.newLineAtOffset(100, 700);
+        contents.showText("Hello, World!");
+        contents.endText();
+    }
+
+    doc.save("hello.pdf");
+}
+```
+
+### Using a TrueType font
+
+For Unicode text or custom typefaces, load a TrueType font with `PDType0Font.load()`:
+
+```java HelloWorldTTF.java
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
+
+try (PDDocument doc = new PDDocument())
+{
+    PDPage page = new PDPage();
+    doc.addPage(page);
+
+    PDFont font = PDType0Font.load(doc, new File("/path/to/font.ttf"));
+
+    try (PDPageContentStream contents = new PDPageContentStream(doc, page))
+    {
+        contents.beginText();
+        contents.setFont(font, 12);
+        contents.newLineAtOffset(100, 700);
+        contents.showText(message);
+        contents.endText();
+    }
+
+    doc.save(pdfPath);
+}
+```
+
+### Adding text to an existing document
+
+Use `AppendMode.APPEND` to add content without overwriting the existing page stream. Pass `true` for the `resetContext` parameter when appending to an existing stream to avoid inheriting the page's graphics state:
+
+```java AddMessageToEachPage.java
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.PDPageContentStream.AppendMode;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName;
+import org.apache.pdfbox.util.Matrix;
+import java.awt.Color;
+
+try (PDDocument doc = Loader.loadPDF(new File("input.pdf")))
+{
+    PDFont font = new PDType1Font(FontName.HELVETICA_BOLD);
+    float fontSize = 36.0f;
+
+    for (PDPage page : doc.getPages())
+    {
+        PDRectangle pageSize = page.getMediaBox();
+        float stringWidth = font.getStringWidth(message) * fontSize / 1000f;
+        float centerX = (pageSize.getWidth() - stringWidth) / 2f;
+        float centerY = pageSize.getHeight() / 2f;
+
+        try (PDPageContentStream contentStream = new PDPageContentStream(
+                doc, page, AppendMode.APPEND, true, true))
+        {
+            contentStream.beginText();
+            contentStream.setFont(font, fontSize);
+            contentStream.setNonStrokingColor(Color.red);
+            contentStream.setTextMatrix(Matrix.getTranslateInstance(centerX, centerY));
+            contentStream.showText(message);
+            contentStream.endText();
+        }
+    }
+
+    doc.save("output.pdf");
+}
+```
+
+<Tip>
+`newLineAtOffset(x, y)` moves the text position relative to the start of the current line. To position text absolutely on the page, use `setTextMatrix(Matrix.getTranslateInstance(x, y))`.
+</Tip>
+
+## Adding images
+
+Load an image from a file with `PDImageXObject.createFromFile()`, then draw it onto the page with `drawImage()`. Coordinates refer to the lower-left corner of the image.
+
+```java AddImageToPDF.java
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.PDPageContentStream.AppendMode;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+
+try (PDDocument doc = Loader.loadPDF(new File("input.pdf")))
+{
+    PDPage page = doc.getPage(0);
+
+    // createFromFile is the easiest way with an image file
+    // if you already have the image in a BufferedImage,
+    // call LosslessFactory.createFromImage() instead
+    PDImageXObject pdImage = PDImageXObject.createFromFile(imagePath, doc);
+
+    try (PDPageContentStream contentStream = new PDPageContentStream(
+            doc, page, AppendMode.APPEND, true, true))
+    {
+        float scale = 1f;
+        contentStream.drawImage(pdImage, 20, 20,
+                pdImage.getWidth() * scale, pdImage.getHeight() * scale);
+    }
+
+    doc.save("output.pdf");
+}
+```
+
+<Tip>
+If you already have the image as a `BufferedImage` in memory, use `LosslessFactory.createFromImage(doc, bufferedImage)` instead of `createFromFile`.
+</Tip>
+
+## Page size and orientation
+
+PDFBox includes constants for common page sizes in `PDRectangle`. Pass the rectangle to the `PDPage` constructor to set the size.
+
+<CodeGroup>
+
+```java A4 page
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+
+// Portrait A4
+PDPage pageA4 = new PDPage(PDRectangle.A4);
+
+// Portrait US Letter
+PDPage pageLetter = new PDPage(PDRectangle.LETTER);
+```
+
+```java Landscape orientation
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.util.Matrix;
+
+// Set rotation to 90 degrees for landscape
+PDPage page = new PDPage(PDRectangle.A4);
+page.setRotation(90);
+doc.addPage(page);
+
+PDRectangle pageSize = page.getMediaBox();
+float pageWidth = pageSize.getWidth();
+
+// Apply rotation transform in the content stream
+try (PDPageContentStream contentStream = new PDPageContentStream(
+        doc, page, AppendMode.OVERWRITE, false))
+{
+    // translate so that the lower-left corner is the origin after rotation
+    contentStream.transform(new Matrix(0, 1, -1, 0, pageWidth, 0));
+    contentStream.setFont(font, fontSize);
+    contentStream.beginText();
+    contentStream.newLineAtOffset(startX, startY);
+    contentStream.showText(message);
+    contentStream.endText();
+}
+```
+
+</CodeGroup>
+
+Common `PDRectangle` constants: `A0`–`A6`, `LETTER`, `LEGAL`, `TABLOID`. You can also construct a custom size:
+
+```java Custom page size
+// Custom 6×4 inch page (1 point = 1/72 inch)
+PDPage custom = new PDPage(new PDRectangle(6 * 72, 4 * 72));
+```
+
+## Drawing shapes
+
+`PDPageContentStream` exposes path construction operators (`moveTo`, `lineTo`, `addRect`) and painting operators (`stroke`, `fill`). This example draws a rectangle around text from `CreateLandscapePDF.java`:
+
+```java CreateLandscapePDF.java
+// Draw a box around text
+contentStream.moveTo(startX - 2, startY - 2);
+contentStream.lineTo(startX - 2, startY + 200 + fontSize);
+contentStream.stroke();
+
+contentStream.moveTo(startX - 2, startY + 200 + fontSize);
+contentStream.lineTo(startX + 100 + stringWidth + 2, startY + 200 + fontSize);
+contentStream.stroke();
+
+contentStream.moveTo(startX + 100 + stringWidth + 2, startY + 200 + fontSize);
+contentStream.lineTo(startX + 100 + stringWidth + 2, startY - 2);
+contentStream.stroke();
+
+contentStream.moveTo(startX + 100 + stringWidth + 2, startY - 2);
+contentStream.lineTo(startX - 2, startY - 2);
+contentStream.stroke();
+```
+
+To draw a filled rectangle in a single call, use `addRect` followed by `fill`:
+
+```java Filled rectangle
+// x, y, width, height — origin is lower-left
+contentStream.addRect(50, 50, 200, 100);
+contentStream.fill();
+```
+
+<Warning>
+Each path segment built with `moveTo`/`lineTo` must be painted with `stroke()` or `fill()` before starting a new path, or the operators will be applied to the combined path.
+</Warning>

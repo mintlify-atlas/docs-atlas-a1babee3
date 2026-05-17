@@ -1,0 +1,92 @@
+---
+title: "PDFMerger and PDFSplit: combine or divide PDFs"
+description: "Use the PDFBox merge and split commands to combine multiple PDF files into one document or divide a single PDF into separate files by page range."
+---
+
+PDFBox provides two complementary tools for restructuring PDF documents: `merge` combines an ordered list of PDFs into a single output file, and `split` divides a PDF into multiple output files at configurable page boundaries. Both tools preserve page content faithfully and write standard PDF output.
+
+<Tabs>
+  <Tab title="PDFMerger">
+    ## PDFMerger
+
+    The `merge` command accepts two or more input PDFs and concatenates them in the order given, writing the result to a single output file. Bookmarks, annotations, and page content from each source document are preserved.
+
+    ### Usage
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar merge -i <file1.pdf> -i <file2.pdf> ... -o <output.pdf>
+    ```
+
+    ### Options
+
+    | Option         | Default      | Description                                      |
+    | -------------- | ------------ | ------------------------------------------------ |
+    | `-i, --input`  | _(required)_ | Input PDF file; repeat the flag for each source  |
+    | `-o, --output` | _(required)_ | Path for the merged output PDF                   |
+
+    ### Examples
+
+    Merge two PDFs into one:
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar merge \
+      -i chapter1.pdf -i chapter2.pdf \
+      -o combined.pdf
+    ```
+
+    Merge four files and write the result to a specific directory:
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar merge \
+      -i q1.pdf -i q2.pdf -i q3.pdf -i q4.pdf \
+      -o /reports/annual.pdf
+    ```
+  </Tab>
+  <Tab title="PDFSplit">
+    ## PDFSplit
+
+    The `split` command reads a single PDF and writes multiple output files. Without a page range, it splits every page into its own file (one page per PDF). Use `-split` to set a fixed page count per chunk, or `-startPage`/`-endPage` to extract a contiguous range into a single output file.
+
+    ### Usage
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar split -i <input.pdf> [options]
+    ```
+
+    ### Options
+
+    | Option           | Default      | Description                                                                                             |
+    | ---------------- | ------------ | ------------------------------------------------------------------------------------------------------- |
+    | `-i, --input`    | _(required)_ | Path to the input PDF file                                                                              |
+    | `-password`      | _(none)_     | Password to decrypt the document                                                                        |
+    | `-split`         | `1`          | Split after every N pages (default `1` when neither `-startPage` nor `-endPage` is set)                 |
+    | `-startPage`     | _(none)_     | First page of the range to extract (1-based)                                                            |
+    | `-endPage`       | _(none)_     | Last page of the range to extract (1-based, inclusive)                                                  |
+    | `-outputPrefix`  | _(auto)_     | Filename prefix for output files; defaults to the input path without extension                          |
+
+    Output files are named `<prefix>-1.pdf`, `<prefix>-2.pdf`, and so on.
+
+    ### Examples
+
+    Split every page into its own file:
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar split -i book.pdf
+    # writes: book-1.pdf, book-2.pdf, ...
+    ```
+
+    Split into chunks of 10 pages each:
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar split -i book.pdf -split 10
+    ```
+
+    Extract pages 5 through 12 into a single file:
+
+    ```bash
+    java -jar pdfbox-app-3.0.0.jar split -i book.pdf \
+      -startPage 5 -endPage 12 -outputPrefix chapter2
+    # writes: chapter2-1.pdf
+    ```
+  </Tab>
+</Tabs>

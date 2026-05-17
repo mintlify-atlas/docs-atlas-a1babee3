@@ -1,0 +1,186 @@
+---
+title: "Extract text from PDF files with PDFBox"
+description: "Use PDFTextStripper and PDFTextStripperByArea to extract plain text, page ranges, and region-bounded content from PDF documents in Java with PDFBox."
+---
+
+PDFBox provides several classes for extracting text from PDF documents. `PDFTextStripper` handles full-document and page-range extraction, `PDFTextStripperByArea` lets you extract text from a specific rectangular region, and `TextPosition` gives you per-glyph coordinates and font metrics.
+
+## Basic text extraction
+
+The simplest approach is to create a `PDFTextStripper`, optionally configure it, then call `getText()`. The example below is adapted from `ExtractTextSimple.java`:
+
+```java ExtractTextSimple.java
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+import org.apache.pdfbox.text.PDFTextStripper;
+
+try (PDDocument document = Loader.loadPDF(new File(args[0])))
+{
+    AccessPermission ap = document.getCurrentAccessPermission();
+    if (!ap.canExtractContent())
+    {
+        throw new IOException("You do not have permission to extract text");
+    }
+
+    PDFTextStripper stripper = new PDFTextStripper();
+
+    // This example uses sorting, but in some cases it is more useful to switch it off,
+    // e.g. in some files with columns where the PDF content stream respects the
+    // column order.
+    stripper.setSortByPosition(true);
+
+    String text = stripper.getText(document);
+    System.out.println(text);
+}
+```
+
+`setSortByPosition(true)` re-orders characters by their x/y coordinates before building the string, which is useful when text is rendered out of reading order. Turn it off if the PDF's content stream already encodes the correct reading order (for example, multi-column layouts where the stream follows column order).
+
+## Extracting text from a specific page range
+
+Set `startPage` and `endPage` (both 1-based) before calling `getText()`. To process each page individually:
+
+```java ExtractTextSimple.java
+PDFTextStripper stripper = new PDFTextStripper();
+stripper.setSortByPosition(true);
+
+for (int p = 1; p <= document.getNumberOfPages(); ++p)
+{
+    // Set the page interval to extract. If you don't, then all pages would be extracted.
+    stripper.setStartPage(p);
+    stripper.setEndPage(p);
+
+    // let the magic happen
+    String text = stripper.getText(document);
+
+    System.out.println("page " + p + ":");
+    System.out.println(text.trim());
+}
+```
+
+To extract a range of pages (for example, pages 3–5), set `setStartPage(3)` and `setEndPage(5)` once and call `getText()` a single time.
+
+## Extracting text by region
+
+`PDFTextStripperByArea` extracts text from a named rectangular region. Coordinates use Java screen coordinates where y = 0 is the **top** of the page (not the PDF default where y = 0 is the bottom).
+
+```java ExtractTextByArea.java
+import java.awt.Rectangle;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.text.PDFTextStripperByArea;
+
+try (PDDocument document = Loader.loadPDF(new File(args[0])))
+{
+    PDFTextStripperByArea stripper = new PDFTextStripperByArea();
+    stripper.setSortByPosition(true);
+
+    // Rectangle(x, y, width, height) in Java screen coordinates
+    Rectangle rect = new Rectangle(10, 280, 275, 60);
+    stripper.addRegion("class1", rect);
+
+    PDPage firstPage = document.getPage(0);
+    stripper.extractRegions(firstPage);
+
+    System.out.println("Text in the area:" + rect);
+    System.out.println(stripper.getTextForRegion("class1"));
+}
+```
+
+You can add multiple named regions before calling `extractRegions()`, then retrieve each with `getTextForRegion(name)`.
+
+<Warning>
+`PDFTextStripperByArea` uses Java y-coordinates (y = 0 at top), while PDFBox page coordinates have y = 0 at the bottom. Subtract your PDF y-coordinate from the page height to convert.
+</Warning>
+
+## Getting text positions
+
+Subclass `PDFTextStripper` and override `writeString()` to access individual `TextPosition` objects with character-level coordinates and font information. `DrawPrintTextLocations.java` in the examples module demonstrates the full pattern:
+
+```java DrawPrintTextLocations.java
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.pdfbox.text.TextPosition;
+import java.util.List;
+
+public class MyTextLocations extends PDFTextStripper
+{
+    public MyTextLocations() throws IOException
+    {
+        super();
+    }
+
+    @Override
+    protected void writeString(String string, List<TextPosition> textPositions)
+            throws IOException
+    {
+        for (TextPosition text : textPositions)
+        {
+            System.out.printf(
+                "String[%s] at (%f, %f) font size: %f pt%n",
+                text.getUnicode(),
+                text.getX(),
+                text.getY(),
+                text.getFontSizeInPt()
+            );
+        }
+        super.writeString(string, textPositions);
+    }
+}
+```
+
+Key `TextPosition` methods:
+
+| Method | Description |
+|---|---|
+| `getX()` | X coordinate in user space |
+| `getY()` | Y coordinate in user space |
+| `getWidth()` | Width of the character |
+| `getFontSizeInPt()` | Rendered font size in points |
+| `getUnicode()` | Unicode string for this glyph |
+| `getFont()` | The `PDFont` used to render this character |
+
+## Handling permissions
+
+PDFs can restrict content extraction. Always check `AccessPermission.canExtractContent()` before attempting extraction:
+
+```java Permission check
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+
+AccessPermission ap = document.getCurrentAccessPermission();
+if (!ap.canExtractContent())
+{
+    throw new IOException("You do not have permission to extract text");
+}
+```
+
+`Loader.loadPDF(file, password)` accepts a password string to open encrypted documents before checking permissions.
+
+## Common issues and tips
+
+<AccordionGroup>
+  <Accordion title="Extracted text is empty or garbled">
+    Some PDFs encode text using custom glyph mappings without proper Unicode ToUnicode entries. PDFBox can only decode what the PDF provides. Try opening the file in Adobe Reader and copying text manually — if that also fails, the PDF likely does not contain extractable text.
+
+    If Adobe Reader can copy text but PDFBox cannot, file a bug report with a minimal reproducer.
+  </Accordion>
+
+  <Accordion title="Text is extracted in the wrong order">
+    By default, `PDFTextStripper` follows the content stream order, which may not match reading order. Enable `setSortByPosition(true)` to sort characters by their x/y coordinates.
+
+    For multi-column documents, position-based sorting can merge columns incorrectly. Try disabling `setSortByPosition` and rely on stream order instead.
+  </Accordion>
+
+  <Accordion title="Spaces are missing between words">
+    PDFBox infers word spacing from glyph positions. If the inter-glyph distance is smaller than the threshold, spaces are omitted. There is no public API to tune this threshold directly; subclassing `PDFTextStripper` and overriding `writeLine()` gives you lower-level control.
+  </Accordion>
+
+  <Accordion title="Scanned PDFs return no text">
+    Scanned documents are images, not text. PDFBox cannot extract text from image-only PDFs. You need an OCR engine such as Tesseract to first convert the scanned image to a text layer before PDFBox can process it.
+  </Accordion>
+
+  <Accordion title="Text extraction is slow on large files">
+    Loading a large PDF fully into memory via `Loader.loadPDF(File)` can be slow. Use `Loader.loadPDF(RandomAccessRead)` backed by a memory-mapped file for better performance. You can also limit the page range with `setStartPage` / `setEndPage` to avoid processing the entire document.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,61 @@
+---
+title: "ExtractImages: save PDF images to files via CLI"
+description: "Use the PDFBox export:images command to extract all embedded images from a PDF and write them to individual files in their native format."
+---
+
+The `export:images` command walks every page of a PDF and saves each embedded image to a separate file. Output filenames follow the pattern `<prefix>-<n>.<ext>`, where the extension is determined by the image's compression type in the PDF (JPEG, PNG, TIFF, JP2, etc.). Duplicate image objects are skipped automatically, so shared resources are not written multiple times.
+
+## Usage
+
+```bash
+java -jar pdfbox-app-3.0.0.jar export:images -i <input.pdf> [options]
+```
+
+## Options
+
+| Option             | Default      | Description                                                                                             |
+| ------------------ | ------------ | ------------------------------------------------------------------------------------------------------- |
+| `-i, --input`      | _(required)_ | Path to the input PDF file                                                                              |
+| `-password`        | _(none)_     | Password to open an encrypted PDF or certificate keystore                                               |
+| `-prefix`          | _(auto)_     | Filename prefix for extracted images; defaults to the input PDF path without extension                  |
+| `-useDirectJPEG`   | `false`      | Force raw extraction of JPEG/JPX streams regardless of colorspace or masking                            |
+| `-noColorConvert`  | `false`      | Extract images in their original colorspace where possible (CMYK images may be written as TIFF)         |
+
+## Output format
+
+The file extension is chosen automatically based on the image encoding stored in the PDF:
+
+- JPEG (`DCTDecode`) → `.jpg`
+- JPEG 2000 (`JPXDecode`) → `.jp2`
+- CCITT/grayscale → `.tiff`
+- JBIG2 and all other formats → `.png`
+- Images with alpha masks → `.png` (regardless of original encoding)
+
+When `-noColorConvert` is set, images with more than 3 channels (such as CMYK) are written as `.tiff`; a TIFF codec must be available on the classpath.
+
+## Examples
+
+Extract all images from a PDF, using the default prefix:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar export:images -i brochure.pdf
+# writes: brochure-1.jpg, brochure-2.png, ...
+```
+
+Use a custom prefix and save files to a different directory:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar export:images -i brochure.pdf -prefix /tmp/imgs/page
+```
+
+Force raw JPEG extraction (avoids colorspace conversion for CMYK sources):
+
+```bash
+java -jar pdfbox-app-3.0.0.jar export:images -i catalog.pdf -useDirectJPEG
+```
+
+Extract images preserving their original colorspace:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar export:images -i catalog.pdf -noColorConvert
+```

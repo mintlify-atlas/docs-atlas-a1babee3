@@ -1,0 +1,105 @@
+---
+title: "Working with fonts and font embedding in PDFBox"
+description: "Use the Standard 14 fonts, embed TrueType or Type 1 fonts with PDType0Font and PDType1Font, enable subsetting, and measure text width for precise layout."
+---
+
+PDFBox provides three main paths for working with fonts: the Standard 14 fonts built into every PDF viewer, embedded TrueType fonts loaded via `PDType0Font`, and embedded Type 1 fonts loaded via `PDType1Font`. Choosing the right approach depends on the character set you need, file size constraints, and viewer compatibility requirements. For anything beyond Latin-1 or when consistent rendering across environments matters, embedding a TrueType font is the safest option.
+
+## Standard 14 fonts
+
+The Standard 14 fonts (Helvetica, Times, Courier, Symbol, ZapfDingbats, and their variants) are guaranteed to be available in every PDF viewer without embedding. Reference them using the `Standard14Fonts.FontName` enum:
+
+```java CreateSimpleForm.java
+PDFont font = new PDType1Font(FontName.HELVETICA);
+```
+
+Available enum values include `HELVETICA`, `HELVETICA_BOLD`, `HELVETICA_OBLIQUE`, `HELVETICA_BOLD_OBLIQUE`, `TIMES_ROMAN`, `TIMES_BOLD`, `TIMES_ITALIC`, `TIMES_BOLD_ITALIC`, `COURIER`, `COURIER_BOLD`, `COURIER_OBLIQUE`, `COURIER_BOLD_OBLIQUE`, `SYMBOL`, and `ZAPF_DINGBATS`.
+
+Standard 14 fonts do not support characters outside the Windows-1252 encoding. If your text includes characters from other scripts, use an embedded font instead.
+
+## Embedding a TrueType font
+
+`PDType0Font.load()` reads a TTF or OTF file from disk, embeds it into the document, and enables full Unicode support including CJK, Cyrillic, ligatures, and emoji.
+
+```java HelloWorldTTF.java
+try (PDDocument doc = new PDDocument())
+{
+    PDPage page = new PDPage();
+    doc.addPage(page);
+
+    PDFont font = PDType0Font.load(doc, new File("font.ttf"));
+
+    try (PDPageContentStream contents = new PDPageContentStream(doc, page))
+    {
+        contents.beginText();
+        contents.setFont(font, 12);
+        contents.newLineAtOffset(100, 700);
+        contents.showText("Hello, World!");
+        contents.endText();
+    }
+
+    doc.save("output.pdf");
+}
+```
+
+The `EmbeddedFonts` example demonstrates Unicode text and line leading:
+
+```java EmbeddedFonts.java
+PDType0Font font = PDType0Font.load(document, new File("LiberationSans-Regular.ttf"));
+
+try (PDPageContentStream stream = new PDPageContentStream(document, page))
+{
+    stream.beginText();
+    stream.setFont(font, 12);
+    stream.setLeading(12 * 1.2f);
+    stream.newLineAtOffset(50, 600);
+    stream.showText("PDFBox's Unicode with Embedded TrueType Font");
+    stream.newLine();
+    stream.showText("English русский язык Tiếng Việt");
+    stream.endText();
+}
+```
+
+<Note>
+  By default `PDType0Font.load()` subsets the font, embedding only the glyphs actually used in the document. Subsetting can reduce file size significantly when drawing a small number of characters from a large font file.
+</Note>
+
+## Type 1 fonts
+
+To embed a custom Type 1 font from a `.pfb` file, use the `PDType1Font(PDDocument, InputStream)` constructor:
+
+```java HelloWorldType1.java
+try (PDDocument doc = new PDDocument())
+{
+    PDPage page = new PDPage();
+    doc.addPage(page);
+
+    PDFont font;
+    try (InputStream is = new FileInputStream("font.pfb"))
+    {
+        font = new PDType1Font(doc, is);
+    }
+
+    try (PDPageContentStream contents = new PDPageContentStream(doc, page))
+    {
+        contents.beginText();
+        contents.setFont(font, 12);
+        contents.newLineAtOffset(100, 700);
+        contents.showText("Hello, World!");
+        contents.endText();
+    }
+
+    doc.save("output.pdf");
+}
+```
+
+## Measuring text width
+
+Font metrics use PDF text space units where 1000 units equals one point at the current font size. To compute the rendered width of a string in points:
+
+```java
+float fontSize = 12;
+float textWidth = font.getStringWidth("Hello, World!") / 1000 * fontSize;
+```
+
+This is useful for centering or right-aligning text, calculating line breaks, and positioning elements relative to text.

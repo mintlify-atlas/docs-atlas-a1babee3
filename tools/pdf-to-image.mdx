@@ -1,0 +1,63 @@
+---
+title: "PDFToImage: render PDF pages to image files"
+description: "Use the PDFBox render command to convert PDF pages into JPEG, PNG, or other image formats at a configurable DPI, color depth, and page range."
+---
+
+The `render` command uses PDFBox's `PDFRenderer` to rasterize each page of a PDF into an image file. Output filenames follow the pattern `<prefix>-<pageNumber>.<format>`. You can target a single page, a range of pages, or all pages in one pass, and control resolution, color depth, and output quality independently.
+
+## Usage
+
+```bash
+java -jar pdfbox-app-3.0.0.jar render -i <input.pdf> [options]
+```
+
+## Options
+
+| Option                  | Default             | Description                                                                                           |
+| ----------------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `-i, --input`           | _(required)_        | Path to the input PDF file                                                                            |
+| `-password`             | _(none)_            | Password to decrypt the document                                                                      |
+| `-format`               | `jpg`               | Output image format (e.g. `jpg`, `png`, `gif`, `bmp`)                                                |
+| `-prefix, -outputPrefix`| _(auto)_            | Filename prefix for output images; defaults to the input path without extension                        |
+| `-page`                 | _(all pages)_       | Render only this single page (1-based); overrides `-startPage`/`-endPage`                             |
+| `-startPage`            | `1`                 | First page to render (1-based)                                                                        |
+| `-endPage`              | _(last page)_       | Last page to render (inclusive)                                                                       |
+| `-dpi, -resolution`     | screen DPI or `96`  | Output image resolution in dots per inch                                                              |
+| `-color`                | `RGB`               | Color depth: `RGB`, `RGBA`, `GRAY`, `BINARY`, `ARGB`, `BGR`, `GRAY`                                  |
+| `-quality`              | `0` (PNG) / `1` (other) | Compression quality between `0.0` and `1.0`                                                     |
+| `-cropbox`              | _(none)_            | Override crop box for all pages: four integers `llx lly urx ury` in user-space units                  |
+| `-subsampling`          | `false`             | Enable subsampling for PDFs containing very large images (reduces memory use)                         |
+| `-time`                 | `false`             | Print render time statistics to stderr                                                                |
+
+## Examples
+
+Render all pages of a PDF to JPEG at screen resolution:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar render -i document.pdf
+# writes: document-1.jpg, document-2.jpg, ...
+```
+
+Render page 5 only to PNG at 150 DPI:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar render -i document.pdf -page 5 -format png -dpi 150
+```
+
+Render pages 1–3 to high-resolution grayscale TIFF:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar render -i document.pdf \
+  -startPage 1 -endPage 3 -format tiff -dpi 300 -color GRAY
+```
+
+Render a specific page area using a custom crop box:
+
+```bash
+java -jar pdfbox-app-3.0.0.jar render -i document.pdf \
+  -page 1 -cropbox 0 400 595 842 -format png
+```
+
+<Tip>
+Use `-subsampling` when processing scanned PDFs that embed very large raster images to avoid out-of-memory errors. For archival output, prefer `-format tiff -dpi 300` with lossless compression.
+</Tip>
